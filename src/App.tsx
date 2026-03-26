@@ -188,25 +188,47 @@ export default function App() {
 
   const regenerateCaption = () => {
     if (!currentFight) return;
-    const staff = currentFight.originalStaffCaption || currentFight.staffCaption || '';
-    const res = currentFight.resultType?.toLowerCase() || '';
-    const winnerName = currentFight.winner === 'red' ? currentFight['Red Corner'] : currentFight.winner === 'blue' ? currentFight['Blue Corner'] : 'the fighter';
     
-    const themes: any = {
-      ko: ["KNOCKOUT! 💥", "Power unleashed! ⚡", "UNBELIEVABLE POWER! 🔥"],
-      sub: ["Technique wins! 🥋", "Tap out! 🐍", "Elite ground game! 🌊"],
-      decision: ["Tactical masterclass! 🧠", "Going the distance! ⏱️", "War of attrition! 🔥"],
-      general: ["Fireworks! 🔥", "UAE Warriors delivers! 🌍", "Cageside action! 💥"]
+    const res = currentFight.resultType || 'Result';
+    const winnerType = currentFight.winner;
+    const winner = winnerType === 'red' ? currentFight['Red Corner'] : winnerType === 'blue' ? currentFight['Blue Corner'] : 'the fighter';
+    const loser = winnerType === 'red' ? currentFight['Blue Corner'] : winnerType === 'blue' ? currentFight['Red Corner'] : 'his opponent';
+    
+    const resLower = res.toLowerCase();
+
+    const templates: any = {
+      ko: [
+        `Kicking off with absolute fireworks! A striking masterclass ends with a massive ${res} finish for ${winner} over ${loser}.`,
+        `Pure explosive power on display! ${winner} shuts the lights out with a devastating ${res} against ${loser} in ${currentFight.Weight}.`,
+        `The arena is electric! ${winner} finds the target and secures a highlight-reel ${res} victory over ${loser} today.`,
+        `Stunning performance from the heavy hitter! ${winner} clinches a professional ${res} stoppage against ${loser} at UAE Warriors.`
+      ],
+      sub: [
+        `A grappling clinic in the cage! ${winner} shows elite technique with a ${res} win over ${loser} in a thrilling battle.`,
+        `The mats don't lie! ${winner} dictates the ground game and finds the opening for a ${res} finish against ${loser}.`,
+        `World-class Brazilian Jiu-Jitsu on display! ${winner} locks in the victory with a smooth ${res} over ${loser} tonight.`,
+        `Total dominance on the floor! ${winner} remains undefeated in the scramble, securing a technical ${res} against ${loser}.`
+      ],
+      decision: [
+        `A tactical masterclass for the ages! ${winner} outworks ${loser} over three intense rounds to earn a professional ${res}.`,
+        `Pure war of attrition in the cage! ${winner} shows superior cardio and pacing to secure a hard-fought ${res} over ${loser}.`,
+        `Back and forth action from the first bell! ${winner} edges out a dangerous ${loser} via a technical ${res} victory.`,
+        `The judges have spoken! ${winner} controls the pace and the distance to claim a dominant ${res} against ${loser} here.`
+      ],
+      general: [
+        `High-stakes action from Abu Dhabi! ${winner} proves too much for ${loser}, clinching a definitive ${res} win in the cage.`,
+        `The UAE Warriors crowd is roaring! ${winner} captures a significant professional win over ${loser} via a tactical ${res}.`,
+        `Incredible heart from both warriors! ${winner} eventually finds the path to victory against ${loser} with a solid ${res}.`
+      ]
     };
 
-    let selectedTheme = themes.general;
-    if (res.includes('ko')) selectedTheme = themes.ko;
-    else if (res.includes('sub')) selectedTheme = themes.sub;
-    else if (res.includes('decision')) selectedTheme = themes.decision;
+    let selectedTemplates = templates.general;
+    if (resLower.includes('ko')) selectedTemplates = templates.ko;
+    else if (resLower.includes('sub')) selectedTemplates = templates.sub;
+    else if (resLower.includes('decision')) selectedTemplates = templates.decision;
 
-    const intro = selectedTheme[Math.floor(Math.random() * selectedTheme.length)];
-    const mainText = staff || `A massive ${res} performance from ${winnerName}!`;
-    updateFight({ originalStaffCaption: staff, staffCaption: `${intro}\n${mainText}` });
+    const finalCaption = selectedTemplates[Math.floor(Math.random() * selectedTemplates.length)];
+    updateFight({ staffCaption: finalCaption });
   };
 
   return (
