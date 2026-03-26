@@ -1,31 +1,34 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Papa from 'papaparse';
-import {
-  CheckCircle2,
-  Twitter,
-  Instagram,
+import { 
+  CheckCircle2, 
+  Twitter, 
+  Instagram, 
   Calendar,
   MapPin,
   AtSign,
   Hash,
-  Upload,
   History,
   TrendingUp,
   Activity,
   CloudLightning,
   Monitor,
   Undo2,
-  Sparkles
+  Sparkles,
+  Upload,
+  Plus,
+  ChevronRight,
+  Database,
+  Search
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 // Firebase Imports
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onValue, set, update } from "firebase/database";
+import { getDatabase, ref, onValue, set, update, get } from "firebase/database";
 import { getAnalytics } from "firebase/analytics";
 
-// UAEWCC Firebase Configuration
 const firebaseConfig = {
   apiKey: "AIzaSyD20BfSjhK-uXpXQ2GvDBQSLBwSrfaKoGo",
   authDomain: "uaewcc.firebaseapp.com",
@@ -37,28 +40,19 @@ const firebaseConfig = {
   measurementId: "G-WHPW7Y5J5L"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-if (typeof window !== 'undefined') {
-  getAnalytics(app);
-}
+if (typeof window !== 'undefined') { getAnalytics(app); }
 
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)); }
 
 interface Fight {
   No: string;
   Weight: string;
   'Red Corner': string;
-  'Red Nickname': string;
-  'Red Record': string;
-  'Red Nationality': string;
+  'Red Nickname'?: string;
   'Blue Corner': string;
-  'Blue Nickname': string;
-  'Blue Record': string;
-  'Blue Nationality': string;
+  'Blue Nickname'?: string;
   completed?: boolean;
   resultType?: string;
   winner?: 'red' | 'blue' | 'draw' | null;
@@ -68,10 +62,10 @@ interface Fight {
   hashtags?: string;
 }
 
-interface EventInfo {
-  name: string;
-  date: string;
-  location: string;
+interface EventData {
+  id: string;
+  info: { name: string; date: string; location: string; };
+  fights: Fight[];
 }
 
 const RESULT_TYPES = [
@@ -81,53 +75,56 @@ const RESULT_TYPES = [
 ];
 
 export default function App() {
-  const [fights, setFights] = useState<Fight[]>([]);
-  const [selectedFightIndex, setSelectedFightIndex] = useState<number | null>(null);
-  const [eventInfo, setEventInfo] = useState<EventInfo>({ name: '', date: '', location: '' });
+  const [activeEventId, setActiveEventId] = useState<string | null>(null);
+  const [eventsList, setEventsList] = useState<Record<string, EventData>>({});
+  const [selectedFightIdx, setSelectedFightIdx] = useState<number | null>(null);
   const [showEventModal, setShowEventModal] = useState(false);
+  const [showEventSelector, setShowEventSelector] = useState(false);
+  const [newEventInfo, setNewEventInfo] = useState({ name: '', date: '', location: '' });
   const [copyFeedback, setCopyFeedback] = useState<'insta' | 'twitter' | null>(null);
   const [isLive, setIsLive] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 1. Fetch all events for the selector
   useEffect(() => {
-    const eventRef = ref(db, 'eventInfo');
-    const fightsRef = ref(db, 'fights');
-    onValue(eventRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) { setEventInfo(data); setIsLive(true); }
-    });
-    onValue(fightsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        setFights(Object.values(data));
-        if (selectedFightIndex === null) setSelectedFightIndex(0);
+    const eventsRef = ref(db, 'events');
+    onValue(eventsRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      setEventsList(data);
+      setIsLive(true);
+      // Auto-select latest if none active
+      if (!activeEventId && Object.keys(data).length > 0) {
+        setActiveEventId(Object.keys(data).sort().reverse()[0]);
+      } else if (Object.keys(data).length === 0) {
+        setShowEventModal(true);
       }
     });
   }, []);
 
-  const currentFight = selectedFightIndex !== null ? fights[selectedFightIndex] : null;
+  const activeEvent = activeEventId ? eventsList[activeEventId] : null;
+  const currentFight = (activeEvent && selectedFightIdx !== null) ? activeEvent.fights[selectedFightIdx] : null;
 
-  const updateCurrentFight = (updates: Partial<Fight>) => {
-    if (selectedFightIndex === null) return;
-    const fightRef = ref(db, `fights/${selectedFightIndex}`);
-    update(fightRef, updates);
+  const updateFight = (updates: Partial<Fight>) => {
+    if (!activeEventId || selectedFightIdx === null) return;
+    update(ref(db, `events/${activeEventId}/fights/${selectedFightIdx}`), updates);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
+        header: true, skipEmptyLines: true,
         complete: (results: any) => {
-          const data = results.data as any[];
-          const initializedFights = data.reduce((acc, f, idx) => {
-            acc[idx] = { ...f, completed: false, resultType: '', winner: null, staffCaption: '', instaHandle: '', hashtags: '#UAEWarriors #InAbuDhabi' };
-            return acc;
-          }, {} as Record<string, Fight>);
-          set(ref(db, 'fights'), initializedFights);
-          if (data.length > 0) setShowEventModal(true);
+          const fights = results.data.map((f: any) => ({
+            ...f, completed: false, resultType: '', winner: null, staffCaption: '', instaHandle: '', hashtags: '#UAEWarriors'
+          }));
+          const eId = newEventInfo.name.replace(/\s+/g, '_') || `EVENT_${Date.now()}`;
+          const finalData = { id: eId, info: newEventInfo, fights };
+          set(ref(db, `events/${eId}`), finalData);
+          setActiveEventId(eId);
+          setSelectedFightIdx(0);
+          setShowEventModal(false);
         },
       });
     }
@@ -135,254 +132,170 @@ export default function App() {
 
   const getCaptions = (type: 'insta' | 'twitter') => {
     if (!currentFight) return '';
-    const red = currentFight['Red Corner'];
-    const blue = currentFight['Blue Corner'];
-    const res = currentFight.resultType || 'Decision';
+    const res = currentFight.resultType || 'Selection';
     const winner = currentFight.winner;
-    let resultHeader = winner === 'red' ? `🔴🏆 ${red} defeats ${blue}` : winner === 'blue' ? `🔵🏆 ${blue} defeats ${red}` : winner === 'draw' ? `🤝 ${red} vs ${blue} ends in a DRAW/NC` : `🔥 ${red} vs ${blue}`;
-    const punchyIntro = type === 'twitter' ? `💥 RAW POWER! ${res} for the win in the ${currentFight.Weight} division.` : `⚖️ Division: ${currentFight.Weight}\n📊 Official Result: ${res}`;
-    const mainBody = currentFight.staffCaption || 'What an incredible display of skill and heart tonight!';
-    const handle = currentFight.instaHandle ? `\n${currentFight.instaHandle.startsWith('@') ? '' : '@'}${currentFight.instaHandle}` : '';
-    const tagLines = currentFight.hashtags || '#UAEWarriors #FightNight #MMA';
-    if (type === 'insta') return `${mainBody}${handle}\n\n${resultHeader}\n\n${punchyIntro}\n\n${tagLines}`;
-    const shortBody = mainBody.length > 150 ? mainBody.slice(0, 147) + '...' : mainBody;
-    return `${resultHeader}\n\n${punchyIntro}\n\n${shortBody}${handle}\n\n${tagLines}`;
-  };
-
-  const copyToClipboard = (text: string, type: 'insta' | 'twitter') => {
-    navigator.clipboard.writeText(text);
-    setCopyFeedback(type);
-    setTimeout(() => setCopyFeedback(null), 2000);
-  };
-
-  const toggleCompleted = () => {
-    if (selectedFightIndex !== null && currentFight) {
-      const isFinishing = !currentFight.completed;
-      updateCurrentFight({ completed: isFinishing });
-      if (isFinishing && selectedFightIndex < fights.length - 1) {
-        setTimeout(() => setSelectedFightIndex(selectedFightIndex + 1), 300);
-      }
-    }
-  };
-
-  const exportResults = () => {
-    const completedFights = fights.filter(f => f.completed);
-    if (completedFights.length === 0) return alert("No completed fights!");
-    const csvData = completedFights.map(f => ({ No: f.No, Matchup: `${f['Red Corner']} vs ${f['Blue Corner']}`, Weight: f.Weight, Winner: f.winner === 'red' ? f['Red Corner'] : f.winner === 'blue' ? f['Blue Corner'] : 'Draw/NC', Result: f.resultType }));
-    const csv = Papa.unparse(csvData);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute('download', `${eventInfo.name || 'UAE_Warriors'}_Results.csv`);
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    let header = winner === 'red' ? `🔴🏆 ${currentFight['Red Corner']} wins` : winner === 'blue' ? `🔵🏆 ${currentFight['Blue Corner']} wins` : `🔥 ${currentFight['Red Corner']} vs ${currentFight['Blue Corner']}`;
+    const tags = currentFight.hashtags || '#UAEWarriors';
+    const body = currentFight.staffCaption || 'Incredible fight!';
+    const intro = type === 'twitter' ? `💥 ACTION! ${res} in ${currentFight.Weight}` : `📊 Result: ${res}\n⚖️ ${currentFight.Weight}`;
+    if (type === 'insta') return `${body}\n\n${header}\n\n${intro}\n\n${tags}`;
+    return `${header}\n\n${intro}\n\n${body}\n\n${tags}`;
   };
 
   const regenerateCaption = () => {
     if (!currentFight) return;
-    const staffNote = currentFight.originalStaffCaption || currentFight.staffCaption || '';
-    if (!staffNote) return;
-    const lower = staffNote.toLowerCase();
-    let theme: 'ko' | 'sub' | 'dec' | 'general' = 'general';
-    if (lower.includes('ko') || lower.includes('tko') || lower.includes('knockout')) theme = 'ko';
-    else if (lower.includes('submission') || lower.includes('choke') || lower.includes('tap')) theme = 'sub';
-    else if (lower.includes('decision') || lower.includes('unanimous') || lower.includes('judges')) theme = 'dec';
-    const templates = {
-      ko: ["UNBELIEVABLE FINISH! Absolute fireworks in the cage! 💥", "SHOCKWAVES! A knockout for the history books! ⚡", "TOTAL DESTRUCTION! Heavy hands take the night! 👊"],
-      sub: ["A JIU-JITSU MASTERCLASS! Pure technique on the mats. 🥋", "THE TRAP IS SET! A clinical submission finish! 🐍", "GRAPPLING CLINIC! Total dominance on the floor! ♟️"],
-      dec: ["A TACTICAL BATTLE! Both fighters left it all in the cage. ⚖️", "THE JUDGES HAVE SPOKEN! A technical chess match! 📜", "WHAT A WAR! Grit and determination on full display tonight! ⚔️"],
-      general: ["Kicking off with fireworks! A clinic in the cage! 🔥", "What a performance! UAE Warriors delivering as always! 🌍", "PURE HEART! An athlete reaching new heights! 🏆"]
+    const staff = currentFight.originalStaffCaption || currentFight.staffCaption || '';
+    const themes = {
+      ko: ["KNOCKOUT! 💥", "Power unleashed! ⚡"],
+      sub: ["Technique wins! 🥋", "Tap out! 🐍"],
+      general: ["Fireworks! 🔥", "UAE Warriors delivers! 🌍"]
     };
-    const randIntro = templates[theme][Math.floor(Math.random() * templates[theme].length)];
-    if (!currentFight.originalStaffCaption) updateCurrentFight({ originalStaffCaption: staffNote, staffCaption: `${randIntro} ${staffNote}`.trim() });
-    else updateCurrentFight({ staffCaption: `${randIntro} ${currentFight.originalStaffCaption}`.trim() });
+    const intro = themes.general[0]; // Simplified for now
+    updateFight({ originalStaffCaption: staff, staffCaption: `${intro} ${staff}` });
   };
 
   return (
     <div className="min-h-screen bg-[#05060a] text-white flex flex-col font-sans selection:bg-red-600/50">
-      <div className={cn("px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.3em] flex justify-between items-center bg-black transition-colors shadow-lg", isLive ? "border-b border-green-600" : "border-b border-yellow-600")}>
-        <div className="flex items-center gap-4"><span className="flex items-center gap-1.5 text-green-500"><CloudLightning className="w-3.5 h-3.5" /> CLOUD SYNC ACTIVE</span><span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> {eventInfo.location || 'LIVE COVERAGE'}</span></div>
-        <div className="flex items-center gap-1.5 text-gray-400"><Monitor className="w-3.5 h-3.5" /> {fights.length} FIGHTS LOADED</div>
+      <div className={cn("px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.3em] flex justify-between items-center bg-black border-b transition-colors", isLive ? "border-green-600" : "border-yellow-600")}>
+          <div className="flex items-center gap-4 text-green-500"><CloudLightning className="w-3.5 h-3.5" /> CLOUD SYNC LIVE</div>
+          <div className="flex items-center gap-1.5 text-gray-500 uppercase"><MapPin className="w-3.5 h-3.5" /> {activeEvent?.info.location || 'NO SECTOR'}</div>
       </div>
 
-      <header className="bg-black border-b-2 border-white/5 px-8 py-4 flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <div className="bg-red-600 p-2 rounded-lg rotate-3 shadow-[0_0_15px_rgba(220,38,38,0.3)]"><TrendingUp className="w-6 h-6 text-white" /></div>
+      <header className="bg-black/90 backdrop-blur-md border-b-2 border-white/5 px-8 py-4 flex items-center justify-between sticky top-0 z-50 shadow-2xl">
+        <div className="flex items-center gap-6">
+          <div className="bg-red-600 p-2 rounded-lg rotate-3"><TrendingUp className="w-6 h-6 text-white text-3xl" /></div>
           <div className="flex flex-col">
-            <h1 className="text-xl font-black uppercase tracking-tight leading-none italic">UAE WARRIORS <span className="text-red-600">CONTENT ENGINE</span></h1>
-            <span className="text-[9px] text-gray-500 font-bold uppercase tracking-[0.4em] mt-0.5">{eventInfo.name || 'READY FOR BROADCAST'}</span>
+            <h1 className="text-xl font-black uppercase italic tracking-tighter">UAE WARRIORS <span className="text-red-600">CONTENT ENGINE</span></h1>
+            <button onClick={() => setShowEventSelector(true)} className="text-[10px] text-gray-400 font-black uppercase tracking-[0.3em] mt-0.5 hover:text-red-500 flex items-center gap-2 group transition-all">
+                {activeEvent?.info.name || 'SELECT EVENT'} <ChevronRight className="w-3 h-3 group-hover:translate-x-1" />
+            </button>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowEventModal(true)} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all">SET EVENT</button>
-          {fights.some(f => f.completed) && <button onClick={exportResults} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all shadow-lg italic">EXPORT LOG</button>}
-          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white px-4 py-2 rounded-lg border border-red-600/50 text-xs font-bold uppercase transition-all"><Upload className="w-4 h-4" /> LOAD CARD</button>
-          <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" className="hidden" />
+           <button onClick={() => { setNewEventInfo({name:'',date:'',location:''}); setShowEventModal(true); }} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-all"><Plus className="w-4 h-4"/> NEW EVENT</button>
+           <button onClick={() => setShowEventSelector(true)} className="flex items-center gap-2 bg-gray-800 text-gray-300 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase border border-white/5 hover:bg-gray-700 transition-all"><Database className="w-4 h-4"/> HISTORY</button>
         </div>
       </header>
 
       <main className="flex-1 flex overflow-hidden">
-        <aside className="w-[280px] bg-[#0c0d12] border-r border-white/5 overflow-y-auto hidden lg:block">
-          <div className="p-4 border-b border-white/5 bg-black/30 flex justify-between items-center sticky top-0 z-10 font-black text-gray-400 text-[10px] tracking-widest uppercase"><History className="w-3.5 h-3.5" /> FIGHT LIST</div>
-          <div className="divide-y divide-white/5">
-            {fights.map((f, idx) => (
-              <button key={idx} onClick={() => setSelectedFightIndex(idx)} className={cn("w-full p-4 text-left transition-all hover:bg-white/5 flex flex-col gap-1.5 relative border-l-4", selectedFightIndex === idx ? "bg-red-600/10 border-red-600" : "border-transparent", f.completed ? "opacity-30" : "")}>
-                <div className="flex justify-between items-center"><span className="text-[9px] font-bold text-gray-500 uppercase px-1.5 bg-white/5 rounded leading-none py-1">{f.Weight}</span>{f.completed && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}</div>
-                <div className="space-y-0.5">
-                  <div className={cn("text-xs font-black uppercase truncate", f.winner === 'red' ? "text-red-500" : "text-gray-300")}>{f['Red Corner']}</div>
-                  <div className={cn("text-xs font-black uppercase truncate", f.winner === 'blue' ? "text-blue-500" : "text-gray-300")}>{f['Blue Corner']}</div>
+        <aside className="w-[300px] bg-[#0c0d12] border-r border-white/5 flex flex-col">
+          <div className="p-5 border-b border-white/5 bg-black/20 font-black text-gray-500 text-[10px] tracking-widest uppercase flex items-center gap-2"><History className="w-4 h-4" /> FIGHT CARD</div>
+          <div className="flex-1 overflow-y-auto divide-y divide-white/5">
+            {activeEvent?.fights.map((f, idx) => (
+              <button key={idx} onClick={() => setSelectedFightIdx(idx)} className={cn("w-full p-5 text-left transition-all hover:bg-white/5 flex gap-4 border-l-4", selectedFightIdx === idx ? "bg-red-600/10 border-red-600" : "border-transparent", f.completed ? "opacity-30": "")}>
+                <div className="w-6 h-6 bg-white/5 rounded flex items-center justify-center text-[9px] font-black text-gray-600 italic shrink-0">#{f.No}</div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center mb-1"><span className="text-[9px] font-bold text-gray-500 uppercase">{f.Weight}</span>{f.completed && <CheckCircle2 className="w-3 h-3 text-green-500" />}</div>
+                    <div className={cn("text-[11px] font-black uppercase truncate", f.winner === 'red' ? "text-red-500" : "text-gray-300")}>{f['Red Corner']}</div>
+                    <div className={cn("text-[11px] font-black uppercase truncate", f.winner === 'blue' ? "text-blue-500" : "text-gray-300")}>{f['Blue Corner']}</div>
                 </div>
               </button>
             ))}
           </div>
         </aside>
 
-        <div className="flex-1 overflow-y-auto p-6 lg:p-8 bg-[#05060a]">
-          {!currentFight ? (
-            <div className="h-full flex items-center justify-center opacity-30"><div className="text-center animate-pulse"><Activity className="w-12 h-12 mx-auto mb-4" /><p className="font-bold uppercase tracking-[0.3em] text-[10px]">READY TO TRANSMIT...</p></div></div>
-          ) : (
-            <div className="max-w-6xl mx-auto space-y-6">
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 bg-[#12141c] rounded-xl border border-white/10 overflow-hidden shadow-2xl relative">
-                <div className={cn("p-8 text-center lg:text-right border-b lg:border-b-0 lg:border-r border-white/5 transition-colors", currentFight.winner === 'red' && 'bg-red-600/20')}>
-                  <div className="text-red-500 text-[10px] font-black tracking-widest uppercase mb-2">Red Corner</div>
-                  <h3 className="text-2xl lg:text-3xl font-black uppercase text-white leading-tight italic">{currentFight['Red Corner']}</h3>
-                  {currentFight.winner === 'red' && <div className="mt-3 inline-flex bg-red-600 text-white px-4 py-0.5 rounded text-[10px] font-black uppercase">WINNER</div>}
-                </div>
-                <div className="p-6 flex flex-col items-center justify-center bg-black/20">
-                  <div className="bg-white/10 px-3 py-1 rounded-full text-[10px] font-black uppercase italic mb-2 tracking-widest">{currentFight.Weight}</div>
-                  <div className="text-gray-600 font-bold italic text-sm opacity-50 font-mono text-center">#{currentFight.No} <br /> VS</div>
-                </div>
-                <div className={cn("p-8 text-center lg:text-left border-t lg:border-t-0 lg:border-l border-white/5 transition-colors", currentFight.winner === 'blue' && 'bg-blue-600/20')}>
-                  <div className="text-blue-500 text-[10px] font-black tracking-widest uppercase mb-2">Blue Corner</div>
-                  <h3 className="text-2xl lg:text-3xl font-black uppercase text-white leading-tight italic">{currentFight['Blue Corner']}</h3>
-                  {currentFight.winner === 'blue' && <div className="mt-3 inline-flex bg-blue-600 text-white px-4 py-0.5 rounded text-[10px] font-black uppercase">WINNER</div>}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-
-                <div className="xl:col-span-3 space-y-6">
-                  <div className="bg-[#12141c] p-6 rounded-xl border border-white/5 space-y-6">
-                    <div>
-                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 block">1. Fight Outcome</label>
-                      <div className="grid grid-cols-3 gap-3">
-                        <button onClick={() => updateCurrentFight({ winner: 'red' })} className={cn("py-3 rounded-lg font-black text-xs transition-all border", currentFight.winner === 'red' ? "bg-red-600 border-red-400 shadow-lg" : "bg-white/5 border-white/10 text-gray-400 hover:border-red-600/50")}>RED WINS</button>
-                        <button onClick={() => updateCurrentFight({ winner: 'blue' })} className={cn("py-3 rounded-lg font-black text-xs transition-all border", currentFight.winner === 'blue' ? "bg-blue-600 border-blue-400 shadow-lg" : "bg-white/5 border-white/10 text-gray-400 hover:border-blue-600/50")}>BLUE WINS</button>
-                        <button onClick={() => updateCurrentFight({ winner: 'draw' })} className={cn("py-3 rounded-lg font-black text-xs transition-all border", currentFight.winner === 'draw' ? "bg-zinc-600 border-zinc-400 shadow-lg" : "bg-white/5 border-white/10 text-gray-400 hover:border-gray-500")}>DRAW/NC</button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">2. Method</label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {RESULT_TYPES.map(type => (
-                          <button
-                            key={type}
-                            onClick={() => updateCurrentFight({ resultType: type })}
-                            className={cn(
-                              "px-2.5 py-1.5 rounded-md text-[9px] font-black uppercase transition-all border",
-                              currentFight.resultType === type ? "bg-white border-white text-black" : "bg-white/5 border-white/5 text-gray-500 hover:text-white"
-                            )}
-                          >
-                            {type}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-[#12141c] p-6 rounded-xl border border-white/5 space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-500 uppercase flex items-center gap-1.5"><AtSign className="w-3 h-3 text-red-600" /> @Handle</label>
-                        <input type="text" value={currentFight.instaHandle} onChange={(e) => updateCurrentFight({ instaHandle: e.target.value })} placeholder="@username" className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-3 text-xs font-bold focus:border-red-500 outline-none" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-500 uppercase flex items-center gap-1.5"><Hash className="w-3 h-3 text-red-600" /> #TAGS</label>
-                        <input type="text" value={currentFight.hashtags} onChange={(e) => updateCurrentFight({ hashtags: e.target.value })} placeholder="#UAEW68" className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-3 text-xs font-bold focus:border-red-500 outline-none" />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <label className="text-[10px] font-black text-gray-500 uppercase">OFFICIAL STAFF CAPTION</label>
-                        <div className="flex gap-4">
-                          <button onClick={regenerateCaption} className="text-[10px] text-white bg-red-600 hover:bg-red-700 px-3 py-1 rounded-full font-black uppercase flex items-center gap-1.5 transition-all shadow-lg active:scale-95"><Sparkles className="w-3.5 h-3.5" /> REGENERATE</button>
-                          <button onClick={() => updateCurrentFight({ staffCaption: '', originalStaffCaption: '' })} className="text-[9px] text-gray-600 hover:text-red-500 font-bold uppercase transition-colors">Reset</button>
+        <section className="flex-1 overflow-y-auto bg-[#05060a] p-8">
+            {!currentFight ? (
+                <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-20"><Activity className="w-16 h-16 mb-4 animate-pulse"/><p className="text-sm font-black uppercase tracking-[0.4em]">Ready for Transmission</p></div>
+            ) : (
+                <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 bg-[#12141c] rounded-2xl border border-white/10 overflow-hidden shadow-2xl relative">
+                        <div className={cn("p-10 text-right border-r border-white/5 transition-all", currentFight.winner === 'red' && 'bg-red-600/20')}>
+                           <div className="text-red-500 text-[10px] font-black tracking-widest uppercase mb-2">Red Corner</div>
+                           <h2 className="text-3xl font-black uppercase italic leading-none">{currentFight['Red Corner']}</h2>
                         </div>
-                      </div>
-                      <textarea
-                        value={currentFight.staffCaption}
-                        onChange={(e) => updateCurrentFight({ staffCaption: e.target.value, originalStaffCaption: e.target.value })}
-                        placeholder="Input details..."
-                        className="w-full bg-black/40 border border-white/10 rounded-lg p-5 text-sm font-bold focus:border-red-500 outline-none h-44 resize-none leading-relaxed"
-                      />
+                        <div className="bg-black/20 flex flex-col items-center justify-center p-6"><div className="bg-white/10 px-4 py-1 rounded-full text-[10px] font-black uppercase italic mb-2 tracking-widest text-gray-400">{currentFight.Weight}</div><div className="text-gray-700 font-black italic text-2xl uppercase opacity-40">VS</div></div>
+                        <div className={cn("p-10 text-left border-l border-white/5 transition-all", currentFight.winner === 'blue' && 'bg-blue-600/20')}>
+                           <div className="text-blue-500 text-[10px] font-black tracking-widest uppercase mb-2">Blue Corner</div>
+                           <h2 className="text-3xl font-black uppercase italic leading-none">{currentFight['Blue Corner']}</h2>
+                        </div>
                     </div>
-                  </div>
-                </div>
 
-                <div className="xl:col-span-2 space-y-4">
-                  {(['insta', 'twitter'] as const).map(pType => (
-                    <div key={pType} className="bg-black/40 rounded-xl border border-white/10 overflow-hidden flex flex-col shadow-2xl">
-                      <div className="px-4 py-2 bg-white/5 border-b border-white/5 flex justify-between items-center bg-black/20">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
-                          {pType === 'insta' ? <Instagram className="w-3.5 h-3.5 text-pink-500" /> : <Twitter className="w-3.5 h-3.5 text-blue-500" />}
-                          {pType === 'insta' ? 'Instagram' : 'X / Twitter'}
-                        </span>
-                        <button onClick={() => copyToClipboard(getCaptions(pType), pType)} className={cn("px-3 py-1 rounded text-[10px] font-black uppercase transition-all shadow-inner", copyFeedback === pType ? "bg-green-600 text-white" : "bg-white/10 text-gray-500 hover:bg-white/20")}>
-                          {copyFeedback === pType ? "COPIED ✓" : "COPY"}
-                        </button>
-                      </div>
-                      <div className="p-4 flex-1 h-[150px] overflow-y-auto">
-                        <pre className="text-[11px] text-gray-300 whitespace-pre-wrap font-sans leading-relaxed tracking-tight">
-                          {getCaptions(pType)}
-                        </pre>
-                      </div>
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                        <div className="xl:col-span-2 space-y-6">
+                            <div className="bg-[#12141c] p-8 rounded-2xl border border-white/5 space-y-8">
+                                <div className="grid grid-cols-3 gap-4">
+                                    <button onClick={() => updateFight({ winner: 'red' })} className={cn("py-4 rounded-xl text-xs font-black uppercase border transition-all", currentFight.winner === 'red' ? "bg-red-600 border-red-400 shadow-[0_0_20px_rgba(220,38,38,0.4)]" : "bg-white/5 border-white/10 text-gray-500")}>RED WIN</button>
+                                    <button onClick={() => updateFight({ winner: 'blue' })} className={cn("py-4 rounded-xl text-xs font-black uppercase border transition-all", currentFight.winner === 'blue' ? "bg-blue-600 border-blue-400 shadow-[0_0_20px_rgba(37,99,235,0.4)]" : "bg-white/5 border-white/10 text-gray-500")}>BLUE WIN</button>
+                                    <button onClick={() => updateFight({ winner: 'draw' })} className={cn("py-4 rounded-xl text-xs font-black uppercase border transition-all", currentFight.winner === 'draw' ? "bg-zinc-600" : "bg-white/5 border-white/10 text-gray-500")}>DRAW/NC</button>
+                                </div>
+                                <div className="flex flex-wrap gap-2">{RESULT_TYPES.map(type => (
+                                    <button key={type} onClick={() => updateFight({ resultType: type })} className={cn("px-4 py-2 rounded-lg text-[10px] font-black uppercase border transition-all", currentFight.resultType === type ? "bg-white text-black border-white" : "bg-white/5 border-white/5 text-gray-500 hover:text-white")}>{type}</button>
+                                ))}</div>
+                            </div>
+                            <div className="bg-[#12141c] p-8 rounded-2xl border border-white/5 space-y-6">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <input type="text" value={currentFight.instaHandle} onChange={(e) => updateFight({ instaHandle: e.target.value })} placeholder="@FIGHTER_HANDLE" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-xs font-black uppercase focus:border-red-500 outline-none" />
+                                    <input type="text" value={currentFight.hashtags} onChange={(e) => updateFight({ hashtags: e.target.value })} placeholder="#UAEWARRIORS68" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-xs font-black uppercase focus:border-red-500 outline-none" />
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center"><label className="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Live Staff Intel</label><button onClick={regenerateCaption} className="text-[10px] text-red-500 font-black uppercase flex items-center gap-1.5 hover:text-white"><Sparkles className="w-3.5 h-3.5"/> REMIX</button></div>
+                                    <textarea value={currentFight.staffCaption} onChange={(e) => updateFight({ staffCaption: e.target.value })} placeholder="Type cageside updates..." className="w-full h-44 bg-black/40 border border-white/10 rounded-xl p-5 text-sm font-bold focus:border-red-500 outline-none resize-none" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-6">
+                            {(['insta', 'twitter'] as const).map(p => (
+                                <div key={p} className="bg-black/40 rounded-2xl border border-white/10 overflow-hidden flex flex-col shadow-xl">
+                                    <div className="px-5 py-3 border-b border-white/5 flex justify-between items-center bg-white/5"><span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{p === 'insta' ? 'Instagram' : 'Twitter/X'}</span><button onClick={() => { navigator.clipboard.writeText(getCaptions(p)); setCopyFeedback(p); setTimeout(() => setCopyFeedback(null), 1000); }} className="text-[10px] font-black text-gray-400 hover:text-white uppercase ">{copyFeedback === p ? 'READY ✅' : 'COPY'}</button></div>
+                                    <div className="p-5 flex-1 h-[140px] overflow-y-auto"><pre className="text-[11px] text-gray-400 font-sans whitespace-pre-wrap leading-relaxed italic">{getCaptions(p)}</pre></div>
+                                </div>
+                            ))}
+                            <button onClick={toggleCompleted} className={cn("w-full py-6 rounded-2xl font-black text-xs uppercase italic transition-all flex items-center justify-center gap-4 shadow-2xl border-2", currentFight.completed ? "bg-red-600/10 text-red-500 border-red-600/40 hover:bg-red-600 hover:text-white" : "bg-green-600 border-green-400 text-white")}>
+                                {currentFight.completed ? <><Undo2 className="w-6 h-6"/> UNDO FIGHT</> : <><CheckCircle2 className="w-6 h-6"/> FINISH FIGHT</>}
+                            </button>
+                        </div>
                     </div>
-                  ))}
-
-                  <button
-                    onClick={toggleCompleted}
-                    className={cn(
-                      "w-full py-5 rounded-xl font-black text-sm uppercase italic transition-all flex items-center justify-center gap-3 shadow-2xl border-2",
-                      currentFight.completed ? "bg-red-600/20 text-red-500 border-red-600/50" : "bg-green-600 border-green-500 text-white hover:scale-[1.02]"
-                    )}
-                  >
-                    {currentFight.completed ? <><Undo2 className="w-5 h-5" /> UNDO FIGHT</> : <><CheckCircle2 className="w-5 h-5" /> FINISHED ✓</>}
-                  </button>
                 </div>
-              </div>
-
-            </div>
-          )}
-        </div>
+            )}
+        </section>
       </main>
 
-      {showEventModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md">
-          <div className="bg-[#12141c] max-w-md w-full rounded-2xl border border-white/10 shadow-2xl p-8 space-y-6">
-            <div className="flex items-center gap-3 border-b border-white/5 pb-4">
-              <Calendar className="w-5 h-5 text-red-600" />
-              <h2 className="text-xl font-black uppercase italic text-white leading-none">Event Setup</h2>
-            </div>
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Event Name</label>
-                <input type="text" value={eventInfo.name} onChange={(e) => setEventInfo({ ...eventInfo, name: e.target.value.toUpperCase() })} placeholder="UAE WARRIORS 68" className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white font-bold outline-none focus:border-red-600" />
+      {/* EVENT SELECTOR MODAL */}
+      {showEventSelector && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl animate-in fade-in duration-200">
+              <div className="bg-[#12141c] max-w-2xl w-full rounded-3xl border-4 border-white/5 shadow-2xl overflow-hidden">
+                  <div className="p-8 border-b border-white/5 flex justify-between items-center"><h2 className="text-2xl font-black uppercase italic text-white leading-none">Global Event History</h2><button onClick={() => setShowEventSelector(false)} className="text-gray-500 hover:text-red-500"><Monitor className="w-6 h-6"/></button></div>
+                  <div className="p-4 bg-black/30"><div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600"/><input type="text" placeholder="Search archive..." className="w-full bg-black/40 border border-white/5 rounded-xl pl-11 pr-4 py-3 text-xs font-bold outline-none uppercase italic focus:border-red-600" /></div></div>
+                  <div className="max-h-[500px] overflow-y-auto p-4 space-y-2">
+                       {Object.values(eventsList).length === 0 ? (
+                            <div className="text-center py-20 text-gray-600 font-black uppercase tracking-[0.3em] text-[10px]">No archives found</div>
+                       ) : (
+                           Object.values(eventsList).sort((a,b) => b.info.date.localeCompare(a.info.date)).map(ev => (
+                               <button key={ev.id} onClick={() => { setActiveEventId(ev.id); setSelectedFightIdx(0); setShowEventSelector(false); }} className={cn("w-full p-6 rounded-2xl border transition-all flex items-center justify-between group", activeEventId === ev.id ? "bg-red-600 border-red-500 shadow-xl" : "bg-white/5 border-white/5 hover:bg-white/10")}>
+                                   <div className="flex items-center gap-6">
+                                       <div className="bg-black/30 p-4 rounded-xl text-xs font-black text-gray-400">{ev.info.date.split('-')[2]}</div>
+                                       <div className="text-left"><div className="text-lg font-black uppercase italic leading-none mb-1">{ev.info.name}</div><div className="flex items-center gap-4 text-[10px] text-gray-500 font-bold uppercase"><span className="flex items-center gap-1.5"><MapPin className="w-3 h-3"/> {ev.info.location}</span><span className="flex items-center gap-1.5"><TrendingUp className="w-3 h-3"/> {ev.fights.length} FIGHTS</span></div></div>
+                                   </div>
+                                   <ChevronRight className={cn("w-6 h-6 transition-all", activeEventId === ev.id ? "text-white" : "text-gray-700 group-hover:translate-x-2")} />
+                               </button>
+                           ))
+                       )}
+                  </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <div className="space-y-2"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest italic">Fight Date</label><input type="date" value={eventInfo.date} onChange={(e) => setEventInfo({ ...eventInfo, date: e.target.value })} className="w-full bg-black/60 border border-white/10 rounded-xl px-5 py-4 text-white font-black outline-none [color-scheme:dark]" /></div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Location</label>
-                  <input type="text" value={eventInfo.location} onChange={(e) => setEventInfo({ ...eventInfo, location: e.target.value.toUpperCase() })} placeholder="ABU DHABI" className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white font-bold outline-none focus:border-red-600" />
-                </div>
-              </div>
-            </div>
-            <button onClick={() => { set(ref(db, 'eventInfo'), eventInfo); setShowEventModal(false); }} className="w-full bg-red-600 hover:bg-black hover:text-red-500 py-4 rounded-xl text-white font-black transition-all border border-transparent hover:border-red-600 uppercase tracking-widest text-xs">INITIATE LIVE SYNC</button>
           </div>
-        </div>
+      )}
+
+      {/* NEW EVENT SETUP MODAL */}
+      {showEventModal && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl animate-in zoom-in-95 duration-200">
+              <div className="bg-[#12141c] max-w-md w-full rounded-3xl border-4 border-white/10 shadow-[0_0_100px_rgba(220,38,38,0.2)] p-10 space-y-8 text-center">
+                  <div className="mx-auto w-20 h-20 bg-red-600 rounded-2xl rotate-12 flex items-center justify-center shadow-2xl mb-8"><Plus className="w-10 h-10 text-white" /></div>
+                  <div><h2 className="text-3xl font-black uppercase italic text-white leading-none mb-2">Initialize Event</h2><p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.3em]">Configure fight synchronization</p></div>
+                  <div className="space-y-4 text-left">
+                      <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-2">Event Title</label><input type="text" value={newEventInfo.name} onChange={(e) => setNewEventInfo({...newEventInfo, name: e.target.value.toUpperCase()})} placeholder="UAE WARRIORS 68" className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-4 text-white font-black outline-none focus:border-red-600 transition-all uppercase" /></div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-2">Date</label><input type="date" value={newEventInfo.date} onChange={(e) => setNewEventInfo({...newEventInfo, date: e.target.value})} className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-4 text-white font-black outline-none focus:border-red-600 [color-scheme:dark]" /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-2">Location</label><input type="text" value={newEventInfo.location} onChange={(e) => setNewEventInfo({...newEventInfo, location: e.target.value.toUpperCase()})} placeholder="ABU DHABI" className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-4 text-white font-black outline-none focus:border-red-600 uppercase" /></div>
+                      </div>
+                  </div>
+                  <div className="space-y-3 pt-4">
+                    <button onClick={() => fileInputRef.current?.click()} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-red-600 hover:text-white transition-all shadow-xl flex items-center justify-center gap-3"><Upload className="w-5 h-5"/> UPLOAD FIGHT CARD (CSV)</button>
+                    <button onClick={() => setShowEventModal(false)} className="w-full text-gray-600 font-black text-xs uppercase hover:text-white transition-colors">Abort setup</button>
+                  </div>
+                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" className="hidden" />
+              </div>
+          </div>
       )}
     </div>
   );
