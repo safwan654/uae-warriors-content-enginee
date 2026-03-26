@@ -52,6 +52,7 @@ interface Fight {
   'Blue Nickname'?: string;
   completed?: boolean;
   resultType?: string;
+  round?: number | null;
   winner?: 'red' | 'blue' | 'draw' | null;
   staffCaption?: string;
   originalStaffCaption?: string;
@@ -141,7 +142,7 @@ export default function App() {
         header: true, skipEmptyLines: true,
         complete: (results: any) => {
           const fights = results.data.map((f: any) => ({
-            ...f, completed: false, resultType: '', winner: null, staffCaption: '', instaHandle: '', hashtags: '#UAEWarriors'
+            ...f, completed: false, resultType: '', round: null, winner: null, staffCaption: '', instaHandle: '', hashtags: '#UAEWarriors'
           }));
           const eId = newEventInfo.name.replace(/\s+/g, '_') || `EVENT_${Date.now()}`;
           const finalData = { id: eId, info: newEventInfo, fights };
@@ -165,6 +166,7 @@ export default function App() {
   const getCaptions = (type: 'insta' | 'twitter') => {
     if (!currentFight) return '';
     const res = currentFight.resultType || 'Result';
+    const roundTxt = currentFight.round ? ` in Round ${currentFight.round}` : '';
     const winnerType = currentFight.winner;
     const winnerName = winnerType === 'red' ? currentFight['Red Corner'] : winnerType === 'blue' ? currentFight['Blue Corner'] : null;
     
@@ -172,15 +174,13 @@ export default function App() {
     let body = currentFight.staffCaption || '';
     if (!body && winnerName) {
       const line1 = "Kicking off with fireworks! 💥";
-      const line2 = `${res} victory for ${winnerName}.`;
+      const line2 = `${res}${roundTxt} victory for ${winnerName}.`;
       body = `${line1}\n${line2}`;
-    } else if (!body) {
-      body = `Action-packed fight in the ${currentFight.Weight} division!`;
     }
 
     let header = winnerType === 'red' ? `🔴🏆 ${currentFight['Red Corner']} wins` : winnerType === 'blue' ? `🔵🏆 ${currentFight['Blue Corner']} wins` : `🔥 ${currentFight['Red Corner']} vs ${currentFight['Blue Corner']}`;
     const tags = currentFight.hashtags || '#UAEWarriors';
-    const vocab = type === 'twitter' ? `💥 ACTION! ${res} in ${currentFight.Weight}` : `📊 Result: ${res}\n⚖️ ${currentFight.Weight}`;
+    const vocab = type === 'twitter' ? `💥 ACTION! ${res}${roundTxt} in ${currentFight.Weight}` : `📊 Result: ${res}${roundTxt}\n⚖️ ${currentFight.Weight}`;
     
     if (type === 'insta') return `${body}\n\n${header}\n\n${vocab}\n\n${tags}`;
     return `${header}\n\n${vocab}\n\n${body}\n\n${tags}`;
@@ -190,6 +190,7 @@ export default function App() {
     if (!currentFight) return;
     
     const res = currentFight.resultType || 'Result';
+    const rd = currentFight.round ? ` Round ${currentFight.round}` : '';
     const winnerType = currentFight.winner;
     const winner = winnerType === 'red' ? currentFight['Red Corner'] : winnerType === 'blue' ? currentFight['Blue Corner'] : 'the fighter';
     const loser = winnerType === 'red' ? currentFight['Blue Corner'] : winnerType === 'blue' ? currentFight['Red Corner'] : 'his opponent';
@@ -198,16 +199,16 @@ export default function App() {
 
     const templates: any = {
       ko: [
-        `Kicking off with absolute fireworks! A striking masterclass ends with a massive ${res} finish for ${winner} over ${loser}.`,
-        `Pure explosive power on display! ${winner} shuts the lights out with a devastating ${res} against ${loser} in ${currentFight.Weight}.`,
-        `The arena is electric! ${winner} finds the target and secures a highlight-reel ${res} victory over ${loser} today.`,
-        `Stunning performance from the heavy hitter! ${winner} clinches a professional ${res} stoppage against ${loser} at UAE Warriors.`
+        `Kicking off with absolute fireworks! A striking masterclass ends with a massive ${res} victory${rd} for ${winner} over ${loser}.`,
+        `Pure explosive power on display! ${winner} shuts the lights out with a devastating ${res}${rd} against ${loser} in ${currentFight.Weight}.`,
+        `The arena is electric! ${winner} finds the target and secures a highlight-reel ${res}${rd} victory over ${loser} today.`,
+        `Stunning performance from the heavy hitter! ${winner} clinches a professional ${res}${rd} stoppage against ${loser} at UAE Warriors.`
       ],
       sub: [
-        `A grappling clinic in the cage! ${winner} shows elite technique with a ${res} win over ${loser} in a thrilling battle.`,
-        `The mats don't lie! ${winner} dictates the ground game and finds the opening for a ${res} finish against ${loser}.`,
-        `World-class Brazilian Jiu-Jitsu on display! ${winner} locks in the victory with a smooth ${res} over ${loser} tonight.`,
-        `Total dominance on the floor! ${winner} remains undefeated in the scramble, securing a technical ${res} against ${loser}.`
+        `A grappling clinic in the cage! ${winner} shows elite technique with a ${res}${rd} win over ${loser} in a thrilling battle.`,
+        `The mats don't lie! ${winner} dictates the ground game and finds the opening for a ${res}${rd} finish against ${loser}.`,
+        `World-class Brazilian Jiu-Jitsu on display! ${winner} locks in the victory with a smooth ${res}${rd} over ${loser} tonight.`,
+        `Total dominance on the floor! ${winner} remains undefeated in the scramble, securing a technical ${res}${rd} against ${loser}.`
       ],
       decision: [
         `A tactical masterclass for the ages! ${winner} outworks ${loser} over three intense rounds to earn a professional ${res}.`,
@@ -216,9 +217,9 @@ export default function App() {
         `The judges have spoken! ${winner} controls the pace and the distance to claim a dominant ${res} against ${loser} here.`
       ],
       general: [
-        `High-stakes action from Abu Dhabi! ${winner} proves too much for ${loser}, clinching a definitive ${res} win in the cage.`,
-        `The UAE Warriors crowd is roaring! ${winner} captures a significant professional win over ${loser} via a tactical ${res}.`,
-        `Incredible heart from both warriors! ${winner} eventually finds the path to victory against ${loser} with a solid ${res}.`
+        `High-stakes action from Abu Dhabi! ${winner} proves too much for ${loser}, clinching a definitive ${res}${rd} win in the cage.`,
+        `The UAE Warriors crowd is roaring! ${winner} captures a significant professional win over ${loser} via a tactical ${res}${rd}.`,
+        `Incredible heart from both warriors! ${winner} eventually finds the path to victory against ${loser} with a solid ${res}${rd}.`
       ]
     };
 
@@ -299,9 +300,21 @@ export default function App() {
                                     <button onClick={() => updateFight({ winner: 'blue' })} className={cn("py-4 rounded-xl text-xs font-black uppercase border transition-all", currentFight.winner === 'blue' ? "bg-blue-600 border-blue-400 shadow-[0_0_20px_rgba(37,99,235,0.4)]" : "bg-white/5 border-white/10 text-gray-500")}>BLUE WIN</button>
                                     <button onClick={() => updateFight({ winner: 'draw' })} className={cn("py-4 rounded-xl text-xs font-black uppercase border transition-all", currentFight.winner === 'draw' ? "bg-zinc-600" : "bg-white/5 border-white/10 text-gray-500")}>DRAW/NC</button>
                                 </div>
-                                <div className="flex flex-wrap gap-2">{RESULT_TYPES.map(type => (
-                                    <button key={type} onClick={() => updateFight({ resultType: type })} className={cn("px-4 py-2 rounded-lg text-[10px] font-black uppercase border transition-all", currentFight.resultType === type ? "bg-white text-black border-white" : "bg-white/5 border-white/5 text-gray-500 hover:text-white")}>{type}</button>
-                                ))}</div>
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">1. Round Selection</label>
+                                    <div className="flex gap-2">
+                                        {[1, 2, 3, 4, 5].map(r => (
+                                            <button key={r} onClick={() => updateFight({ round: r })} className={cn("w-12 h-12 rounded-xl text-xs font-black transition-all border", currentFight.round === r ? "bg-white text-black border-white" : "bg-white/5 border-white/10 text-gray-600 hover:text-white")}>R{r}</button>
+                                        ))}
+                                        <button onClick={() => updateFight({ round: null })} className={cn("px-4 h-12 rounded-xl text-[9px] font-black uppercase border transition-all", !currentFight.round ? "bg-gray-800 text-white" : "bg-white/5 border-white/10 text-gray-600")}>NONE</button>
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">2. Victory Method</label>
+                                    <div className="flex flex-wrap gap-2">{RESULT_TYPES.map(type => (
+                                        <button key={type} onClick={() => updateFight({ resultType: type })} className={cn("px-4 py-2 rounded-lg text-[10px] font-black uppercase border transition-all", currentFight.resultType === type ? "bg-white text-black border-white" : "bg-white/5 border-white/5 text-gray-500 hover:text-white")}>{type}</button>
+                                    ))}</div>
+                                </div>
                             </div>
                             <div className="bg-[#12141c] p-8 rounded-2xl border border-white/5 space-y-6">
                                 <div className="grid grid-cols-2 gap-4">
