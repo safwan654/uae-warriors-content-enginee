@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.2;
+  font-weight: 800;
+  color-scheme: dark;
+  color: #ffffff;
+  background-color: #000000;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #000000;
+  /* High contrast background for cage-side visibility */
+  background: linear-gradient(180deg, #0a0a0a 0%, #000000 100%);
+}
+
+#root {
+  width: 100%;
+}
+
+/* Custom Scrollbar - High visibility */
+::-webkit-scrollbar {
+  width: 12px;
+}
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: #ff0000;
+  border-radius: 6px;
+  border: 3px solid #000000;
+}
+
+/* Input Styles - High Contrast */
+input, textarea {
+    background: #111111 !important;
+    border-color: #333333 !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+}
+
+input:focus, textarea:focus {
+    border-color: #ff0000 !important;
+    box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.2) !important;
+}
+
+/* Animations */
+@keyframes pulse-red {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.pulse-active {
+  animation: pulse-red 2s infinite ease-in-out;
+}
