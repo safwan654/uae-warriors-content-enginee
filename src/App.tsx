@@ -16,7 +16,8 @@ import {
   Database,
   Search,
   Trash2,
-  Edit2
+  Edit2,
+  Download
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -156,6 +157,34 @@ export default function App() {
     }
   };
 
+  const exportResults = () => {
+    if (!activeEvent) return;
+    const results = activeEvent.fights
+      .filter(f => f.completed)
+      .map(f => ({
+        'Fight No': f.No,
+        'Division': f.Weight,
+        'Winner': f.winner === 'red' ? f['Red Corner'] : f.winner === 'blue' ? f['Blue Corner'] : 'DRAW/NC',
+        'Loser': f.winner === 'red' ? f['Blue Corner'] : f.winner === 'blue' ? f['Red Corner'] : 'N/A',
+        'Method': f.resultType || 'N/A',
+        'Round': f.round || 'N/A',
+        'Live Notes': f.staffCaption || ''
+      }));
+    
+    if (results.length === 0) {
+      alert("No fights completed in this event yet!");
+      return;
+    }
+
+    const csv = Papa.unparse(results);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${activeEvent.info.name}_Results.csv`;
+    a.click();
+  };
+
   const saveEditedInfo = () => {
     if (!activeEventId) return;
     update(ref(db, `events/${activeEventId}/info`), newEventInfo);
@@ -250,6 +279,7 @@ export default function App() {
           </div>
         </div>
         <div className="flex gap-2">
+           <button onClick={exportResults} className="flex items-center gap-2 bg-green-600/20 text-green-500 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase border border-green-500/20 hover:bg-green-600 hover:text-white transition-all"><Download className="w-4 h-4"/> EXPORT LOG</button>
            <button onClick={() => { setNewEventInfo({name:'',date:'',location:''}); setShowEventModal(true); setIsEditingEvent(false); }} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-all"><Plus className="w-4 h-4"/> NEW EVENT</button>
            <button onClick={() => setShowEventSelector(true)} className="flex items-center gap-2 bg-gray-800 text-gray-300 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase border border-white/5 hover:bg-gray-700 transition-all"><Database className="w-4 h-4"/> HISTORY</button>
         </div>
@@ -319,7 +349,7 @@ export default function App() {
                             <div className="bg-[#12141c] p-8 rounded-2xl border border-white/5 space-y-6">
                                 <div className="grid grid-cols-2 gap-4">
                                     <input type="text" value={currentFight.instaHandle} onChange={(e) => updateFight({ instaHandle: e.target.value })} placeholder="@FIGHTER_HANDLE" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-xs font-black focus:border-red-500 outline-none" />
-                                    <input type="text" value={currentFight.hashtags} onChange={(e) => updateHashtagsGlobally(e.target.value)} placeholder="#UAEWARRIORS68" className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs font-black focus:border-red-500 outline-none border-dashed border-red-500/50" title="Changes hashtags for ALL fights in this event" />
+                                    <input type="text" value={currentFight.hashtags} onChange={(e) => updateHashtagsGlobally(e.target.value)} placeholder="#UAEWARRIORS68" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-xs font-black focus:border-red-500 outline-none border-dashed border-red-500/50" title="Changes hashtags for ALL fights in this event" />
                                 </div>
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center"><label className="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Live Staff Intel</label><button onClick={regenerateCaption} className="text-[10px] text-red-500 font-black uppercase flex items-center gap-1.5 hover:text-white transition-all transform active:scale-95"><Sparkles className="w-3.5 h-3.5"/> REGENERATE INTRO</button></div>
@@ -377,7 +407,7 @@ export default function App() {
       {/* NEW/EDIT EVENT SETUP MODAL */}
       {showEventModal && (
           <div className="fixed inset-0 z-[500] flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl animate-in zoom-in-95 duration-200">
-              <div className="bg-[#12141c] max-w-md w-full rounded-3xl border-4 border-white/10 shadow-[0_0_100px_rgba(220,38,38,0.2)] p-10 space-y-8 text-center relative">
+              <div className="bg-[#12141c] max-md w-full rounded-3xl border-4 border-white/10 shadow-[0_0_100px_rgba(220,38,38,0.2)] p-10 space-y-8 text-center relative">
                   <button onClick={() => setShowEventModal(false)} className="absolute right-6 top-6 text-gray-600 hover:text-white"><Monitor className="w-5 h-5"/></button>
                   <div className="mx-auto w-20 h-20 bg-red-600 rounded-2xl rotate-12 flex items-center justify-center shadow-2xl mb-8">{isEditingEvent ? <Edit2 className="w-10 h-10 text-white" /> : <Plus className="w-10 h-10 text-white" />}</div>
                   <div><h2 className="text-3xl font-black uppercase italic text-white leading-none mb-2">{isEditingEvent ? "Adjust Intel" : "Initialize Event"}</h2><p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.3em]">Configure fight synchronization</p></div>
