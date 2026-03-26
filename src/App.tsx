@@ -14,14 +14,16 @@ import {
   Plus,
   ChevronRight,
   Database,
-  Search
+  Search,
+  Trash2,
+  Edit2
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 // Firebase Imports
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onValue, set, update } from "firebase/database";
+import { getDatabase, ref, onValue, set, update, remove } from "firebase/database";
 import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
@@ -75,20 +77,19 @@ export default function App() {
   const [selectedFightIdx, setSelectedFightIdx] = useState<number | null>(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showEventSelector, setShowEventSelector] = useState(false);
+  const [isEditingEvent, setIsEditingEvent] = useState(false);
   const [newEventInfo, setNewEventInfo] = useState({ name: '', date: '', location: '' });
   const [copyFeedback, setCopyFeedback] = useState<'insta' | 'twitter' | null>(null);
   const [isLive, setIsLive] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Fetch all events for the selector
   useEffect(() => {
     const eventsRef = ref(db, 'events');
     onValue(eventsRef, (snapshot) => {
       const data = snapshot.val() || {};
       setEventsList(data);
       setIsLive(true);
-      // Auto-select latest if none active
       if (!activeEventId && Object.keys(data).length > 0) {
         setActiveEventId(Object.keys(data).sort().reverse()[0]);
       } else if (Object.keys(data).length === 0) {
@@ -105,12 +106,31 @@ export default function App() {
     update(ref(db, `events/${activeEventId}/fights/${selectedFightIdx}`), updates);
   };
 
+  const updateHashtagsGlobally = (tags: string) => {
+    if (!activeEventId || !activeEvent) return;
+    const updates: any = {};
+    activeEvent.fights.forEach((_, idx) => {
+      updates[`events/${activeEventId}/fights/${idx}/hashtags`] = tags;
+    });
+    update(ref(db), updates);
+  };
+
   const toggleCompleted = () => {
     if (!currentFight) return;
     const isFinishing = !currentFight.completed;
     updateFight({ completed: isFinishing });
     if (isFinishing && activeEvent && selectedFightIdx !== null && selectedFightIdx < activeEvent.fights.length - 1) {
       setTimeout(() => setSelectedFightIdx(selectedFightIdx + 1), 300);
+    }
+  };
+
+  const deleteEvent = (id: string) => {
+    if (window.confirm("Are you sure you want to permanently delete this event?")) {
+      remove(ref(db, `events/${id}`));
+      if (activeEventId === id) {
+        setActiveEventId(null);
+        setSelectedFightIdx(null);
+      }
     }
   };
 
@@ -129,9 +149,17 @@ export default function App() {
           setActiveEventId(eId);
           setSelectedFightIdx(0);
           setShowEventModal(false);
+          setIsEditingEvent(false);
         },
       });
     }
+  };
+
+  const saveEditedInfo = () => {
+    if (!activeEventId) return;
+    update(ref(db, `events/${activeEventId}/info`), newEventInfo);
+    setShowEventModal(false);
+    setIsEditingEvent(false);
   };
 
   const getCaptions = (type: 'insta' | 'twitter') => {
@@ -149,12 +177,21 @@ export default function App() {
   const regenerateCaption = () => {
     if (!currentFight) return;
     const staff = currentFight.originalStaffCaption || currentFight.staffCaption || '';
-    const themes = {
-      ko: ["KNOCKOUT! 💥", "Power unleashed! ⚡"],
-      sub: ["Technique wins! 🥋", "Tap out! 🐍"],
-      general: ["Fireworks! 🔥", "UAE Warriors delivers! 🌍"]
+    const res = currentFight.resultType?.toLowerCase() || '';
+    
+    const themes: any = {
+      ko: ["KNOCKOUT! 💥", "Power unleashed! ⚡", "UNBELIEVABLE POWER! 🔥"],
+      sub: ["Technique wins! 🥋", "Tap out! 🐍", "Elite ground game! 🌊"],
+      decision: ["Tactical masterclass! 🧠", "Going the distance! ⏱️", "War of attrition! 🔥"],
+      general: ["Fireworks! 🔥", "UAE Warriors delivers! 🌍", "Cageside action! 💥"]
     };
-    const intro = themes.general[0];
+
+    let selectedTheme = themes.general;
+    if (res.includes('ko')) selectedTheme = themes.ko;
+    else if (res.includes('sub')) selectedTheme = themes.sub;
+    else if (res.includes('decision')) selectedTheme = themes.decision;
+
+    const intro = selectedTheme[Math.floor(Math.random() * selectedTheme.length)];
     updateFight({ originalStaffCaption: staff, staffCaption: `${intro} ${staff}` });
   };
 
@@ -170,20 +207,23 @@ export default function App() {
           <div className="bg-red-600 p-2 rounded-lg rotate-3"><TrendingUp className="w-6 h-6 text-white text-3xl" /></div>
           <div className="flex flex-col">
             <h1 className="text-xl font-black uppercase italic tracking-tighter">UAE WARRIORS <span className="text-red-600">CONTENT ENGINE</span></h1>
-            <button onClick={() => setShowEventSelector(true)} className="text-[10px] text-gray-400 font-black uppercase tracking-[0.3em] mt-0.5 hover:text-red-500 flex items-center gap-2 group transition-all">
+            <button onClick={() => setShowEventSelector(true)} className="text-[10px] text-gray-400 font-black uppercase tracking-[0.3em] mt-0.5 hover:text-red-500 flex items-center gap-2 group transition-all text-left">
                 {activeEvent?.info.name || 'SELECT EVENT'} <ChevronRight className="w-3 h-3 group-hover:translate-x-1" />
             </button>
           </div>
         </div>
         <div className="flex gap-2">
-           <button onClick={() => { setNewEventInfo({name:'',date:'',location:''}); setShowEventModal(true); }} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-all"><Plus className="w-4 h-4"/> NEW EVENT</button>
+           <button onClick={() => { setNewEventInfo({name:'',date:'',location:''}); setShowEventModal(true); setIsEditingEvent(false); }} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-lg hover:scale-105 transition-all"><Plus className="w-4 h-4"/> NEW EVENT</button>
            <button onClick={() => setShowEventSelector(true)} className="flex items-center gap-2 bg-gray-800 text-gray-300 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase border border-white/5 hover:bg-gray-700 transition-all"><Database className="w-4 h-4"/> HISTORY</button>
         </div>
       </header>
 
       <main className="flex-1 flex overflow-hidden">
         <aside className="w-[300px] bg-[#0c0d12] border-r border-white/5 flex flex-col">
-          <div className="p-5 border-b border-white/5 bg-black/20 font-black text-gray-500 text-[10px] tracking-widest uppercase flex items-center gap-2"><History className="w-4 h-4" /> FIGHT CARD</div>
+          <div className="p-5 border-b border-white/5 bg-black/20 font-black text-gray-500 text-[10px] tracking-widest uppercase flex items-center justify-between">
+              <span className="flex items-center gap-2"><History className="w-4 h-4" /> FIGHT CARD</span>
+              {activeEvent && <button onClick={() => { setNewEventInfo(activeEvent.info); setIsEditingEvent(true); setShowEventModal(true); }} className="text-gray-600 hover:text-white transition-colors"><Edit2 className="w-3 h-3" /></button>}
+          </div>
           <div className="flex-1 overflow-y-auto divide-y divide-white/5">
             {activeEvent?.fights.map((f, idx) => (
               <button key={idx} onClick={() => setSelectedFightIdx(idx)} className={cn("w-full p-5 text-left transition-all hover:bg-white/5 flex gap-4 border-l-4", selectedFightIdx === idx ? "bg-red-600/10 border-red-600" : "border-transparent", f.completed ? "opacity-30": "")}>
@@ -229,11 +269,11 @@ export default function App() {
                             </div>
                             <div className="bg-[#12141c] p-8 rounded-2xl border border-white/5 space-y-6">
                                 <div className="grid grid-cols-2 gap-4">
-                                    <input type="text" value={currentFight.instaHandle} onChange={(e) => updateFight({ instaHandle: e.target.value })} placeholder="@FIGHTER_HANDLE" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-xs font-black uppercase focus:border-red-500 outline-none" />
-                                    <input type="text" value={currentFight.hashtags} onChange={(e) => updateFight({ hashtags: e.target.value })} placeholder="#UAEWARRIORS68" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-xs font-black uppercase focus:border-red-500 outline-none" />
+                                    <input type="text" value={currentFight.instaHandle} onChange={(e) => updateFight({ instaHandle: e.target.value })} placeholder="@FIGHTER_HANDLE" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-xs font-black focus:border-red-500 outline-none" />
+                                    <input type="text" value={currentFight.hashtags} onChange={(e) => updateHashtagsGlobally(e.target.value)} placeholder="#UAEWARRIORS68" className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-4 text-xs font-black focus:border-red-500 outline-none border-dashed border-red-500/50" title="Changes hashtags for ALL fights in this event" />
                                 </div>
                                 <div className="space-y-4">
-                                    <div className="flex justify-between items-center"><label className="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Live Staff Intel</label><button onClick={regenerateCaption} className="text-[10px] text-red-500 font-black uppercase flex items-center gap-1.5 hover:text-white"><Sparkles className="w-3.5 h-3.5"/> REMIX</button></div>
+                                    <div className="flex justify-between items-center"><label className="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Live Staff Intel</label><button onClick={regenerateCaption} className="text-[10px] text-red-500 font-black uppercase flex items-center gap-1.5 hover:text-white transition-all transform active:scale-95"><Sparkles className="w-3.5 h-3.5"/> REGENERATE INTRO</button></div>
                                     <textarea value={currentFight.staffCaption} onChange={(e) => updateFight({ staffCaption: e.target.value })} placeholder="Type cageside updates..." className="w-full h-44 bg-black/40 border border-white/10 rounded-xl p-5 text-sm font-bold focus:border-red-500 outline-none resize-none" />
                                 </div>
                             </div>
@@ -257,7 +297,7 @@ export default function App() {
 
       {/* EVENT SELECTOR MODAL */}
       {showEventSelector && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-[400] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl animate-in fade-in duration-200">
               <div className="bg-[#12141c] max-w-2xl w-full rounded-3xl border-4 border-white/5 shadow-2xl overflow-hidden">
                   <div className="p-8 border-b border-white/5 flex justify-between items-center"><h2 className="text-2xl font-black uppercase italic text-white leading-none">Global Event History</h2><button onClick={() => setShowEventSelector(false)} className="text-gray-500 hover:text-red-500"><Monitor className="w-6 h-6"/></button></div>
                   <div className="p-4 bg-black/30"><div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600"/><input type="text" placeholder="Search archive..." className="w-full bg-black/40 border border-white/5 rounded-xl pl-11 pr-4 py-3 text-xs font-bold outline-none uppercase italic focus:border-red-600" /></div></div>
@@ -266,13 +306,18 @@ export default function App() {
                             <div className="text-center py-20 text-gray-600 font-black uppercase tracking-[0.3em] text-[10px]">No archives found</div>
                        ) : (
                            Object.values(eventsList).sort((a,b) => b.info.date.localeCompare(a.info.date)).map(ev => (
-                               <button key={ev.id} onClick={() => { setActiveEventId(ev.id); setSelectedFightIdx(0); setShowEventSelector(false); }} className={cn("w-full p-6 rounded-2xl border transition-all flex items-center justify-between group", activeEventId === ev.id ? "bg-red-600 border-red-500 shadow-xl" : "bg-white/5 border-white/5 hover:bg-white/10")}>
-                                   <div className="flex items-center gap-6">
-                                       <div className="bg-black/30 p-4 rounded-xl text-xs font-black text-gray-400">{ev.info.date.split('-')[2]}</div>
-                                       <div className="text-left"><div className="text-lg font-black uppercase italic leading-none mb-1">{ev.info.name}</div><div className="flex items-center gap-4 text-[10px] text-gray-500 font-bold uppercase"><span className="flex items-center gap-1.5"><MapPin className="w-3 h-3"/> {ev.info.location}</span><span className="flex items-center gap-1.5"><TrendingUp className="w-3 h-3"/> {ev.fights.length} FIGHTS</span></div></div>
-                                   </div>
-                                   <ChevronRight className={cn("w-6 h-6 transition-all", activeEventId === ev.id ? "text-white" : "text-gray-700 group-hover:translate-x-2")} />
-                               </button>
+                               <div key={ev.id} className="relative group p-1">
+                                    <button onClick={() => { setActiveEventId(ev.id); setSelectedFightIdx(0); setShowEventSelector(false); }} className={cn("w-full p-6 rounded-2xl border transition-all flex items-center justify-between", activeEventId === ev.id ? "bg-red-600 border-red-500 shadow-xl" : "bg-white/5 border-white/5 hover:bg-white/10")}>
+                                        <div className="flex items-center gap-6">
+                                            <div className="bg-black/30 p-4 rounded-xl text-xs font-black text-gray-400">{ev.info.date.split('-')[2]}</div>
+                                            <div className="text-left"><div className="text-lg font-black uppercase italic leading-none mb-1">{ev.info.name}</div><div className="flex items-center gap-4 text-[10px] text-gray-500 font-bold uppercase"><span className="flex items-center gap-1.5"><MapPin className="w-3 h-3"/> {ev.info.location}</span><span className="flex items-center gap-1.5"><TrendingUp className="w-3 h-3"/> {ev.fights.length} FIGHTS</span></div></div>
+                                        </div>
+                                        <ChevronRight className={cn("w-6 h-6 transition-all", activeEventId === ev.id ? "text-white" : "text-gray-700 opacity-0 group-hover:opacity-100 group-hover:translate-x-2")} />
+                                    </button>
+                                    <div className="absolute right-6 bottom-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                        <button onClick={(e) => { e.stopPropagation(); deleteEvent(ev.id); }} className="p-2 bg-black/40 rounded-lg text-red-500 hover:bg-red-600 hover:text-white transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                                    </div>
+                               </div>
                            ))
                        )}
                   </div>
@@ -280,21 +325,26 @@ export default function App() {
           </div>
       )}
 
-      {/* NEW EVENT SETUP MODAL */}
+      {/* NEW/EDIT EVENT SETUP MODAL */}
       {showEventModal && (
-          <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl animate-in zoom-in-95 duration-200">
-              <div className="bg-[#12141c] max-w-md w-full rounded-3xl border-4 border-white/10 shadow-[0_0_100px_rgba(220,38,38,0.2)] p-10 space-y-8 text-center">
-                  <div className="mx-auto w-20 h-20 bg-red-600 rounded-2xl rotate-12 flex items-center justify-center shadow-2xl mb-8"><Plus className="w-10 h-10 text-white" /></div>
-                  <div><h2 className="text-3xl font-black uppercase italic text-white leading-none mb-2">Initialize Event</h2><p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.3em]">Configure fight synchronization</p></div>
+          <div className="fixed inset-0 z-[500] flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl animate-in zoom-in-95 duration-200">
+              <div className="bg-[#12141c] max-w-md w-full rounded-3xl border-4 border-white/10 shadow-[0_0_100px_rgba(220,38,38,0.2)] p-10 space-y-8 text-center relative">
+                  <button onClick={() => setShowEventModal(false)} className="absolute right-6 top-6 text-gray-600 hover:text-white"><Monitor className="w-5 h-5"/></button>
+                  <div className="mx-auto w-20 h-20 bg-red-600 rounded-2xl rotate-12 flex items-center justify-center shadow-2xl mb-8">{isEditingEvent ? <Edit2 className="w-10 h-10 text-white" /> : <Plus className="w-10 h-10 text-white" />}</div>
+                  <div><h2 className="text-3xl font-black uppercase italic text-white leading-none mb-2">{isEditingEvent ? "Adjust Intel" : "Initialize Event"}</h2><p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.3em]">Configure fight synchronization</p></div>
                   <div className="space-y-4 text-left">
-                      <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-2">Event Title</label><input type="text" value={newEventInfo.name} onChange={(e) => setNewEventInfo({...newEventInfo, name: e.target.value.toUpperCase()})} placeholder="UAE WARRIORS 68" className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-4 text-white font-black outline-none focus:border-red-600 transition-all uppercase" /></div>
+                      <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-2">Event Title</label><input type="text" value={newEventInfo.name} onChange={(e) => setNewEventInfo({...newEventInfo, name: e.target.value})} placeholder="UAE WARRIORS 68" className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-4 text-white font-black outline-none focus:border-red-600 transition-all" /></div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-2">Date</label><input type="date" value={newEventInfo.date} onChange={(e) => setNewEventInfo({...newEventInfo, date: e.target.value})} className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-4 text-white font-black outline-none focus:border-red-600 [color-scheme:dark]" /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-2">Location</label><input type="text" value={newEventInfo.location} onChange={(e) => setNewEventInfo({...newEventInfo, location: e.target.value.toUpperCase()})} placeholder="ABU DHABI" className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-4 text-white font-black outline-none focus:border-red-600 uppercase" /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-2">Location</label><input type="text" value={newEventInfo.location} onChange={(e) => setNewEventInfo({...newEventInfo, location: e.target.value})} placeholder="ABU DHABI" className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-4 text-white font-black outline-none focus:border-red-600" /></div>
                       </div>
                   </div>
                   <div className="space-y-3 pt-4">
-                    <button onClick={() => fileInputRef.current?.click()} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-red-600 hover:text-white transition-all shadow-xl flex items-center justify-center gap-3"><Upload className="w-5 h-5"/> UPLOAD FIGHT CARD (CSV)</button>
+                    {isEditingEvent ? (
+                        <button onClick={saveEditedInfo} className="w-full bg-red-600 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-white hover:text-black transition-all shadow-xl">SAVE CHANGES</button>
+                    ) : (
+                        <button onClick={() => fileInputRef.current?.click()} className="w-full bg-white text-black py-5 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-red-600 hover:text-white transition-all shadow-xl flex items-center justify-center gap-3"><Upload className="w-5 h-5"/> UPLOAD FIGHT CARD (CSV)</button>
+                    )}
                     <button onClick={() => setShowEventModal(false)} className="w-full text-gray-600 font-black text-xs uppercase hover:text-white transition-colors">Abort setup</button>
                   </div>
                   <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" className="hidden" />
