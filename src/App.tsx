@@ -2,12 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Papa from 'papaparse';
 import { 
   CheckCircle2, 
-  Twitter, 
-  Instagram, 
-  Calendar,
   MapPin,
-  AtSign,
-  Hash,
   History,
   TrendingUp,
   Activity,
@@ -26,7 +21,7 @@ import { twMerge } from 'tailwind-merge';
 
 // Firebase Imports
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onValue, set, update, get } from "firebase/database";
+import { getDatabase, ref, onValue, set, update } from "firebase/database";
 import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
@@ -110,6 +105,15 @@ export default function App() {
     update(ref(db, `events/${activeEventId}/fights/${selectedFightIdx}`), updates);
   };
 
+  const toggleCompleted = () => {
+    if (!currentFight) return;
+    const isFinishing = !currentFight.completed;
+    updateFight({ completed: isFinishing });
+    if (isFinishing && activeEvent && selectedFightIdx !== null && selectedFightIdx < activeEvent.fights.length - 1) {
+      setTimeout(() => setSelectedFightIdx(selectedFightIdx + 1), 300);
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -137,9 +141,9 @@ export default function App() {
     let header = winner === 'red' ? `🔴🏆 ${currentFight['Red Corner']} wins` : winner === 'blue' ? `🔵🏆 ${currentFight['Blue Corner']} wins` : `🔥 ${currentFight['Red Corner']} vs ${currentFight['Blue Corner']}`;
     const tags = currentFight.hashtags || '#UAEWarriors';
     const body = currentFight.staffCaption || 'Incredible fight!';
-    const intro = type === 'twitter' ? `💥 ACTION! ${res} in ${currentFight.Weight}` : `📊 Result: ${res}\n⚖️ ${currentFight.Weight}`;
-    if (type === 'insta') return `${body}\n\n${header}\n\n${intro}\n\n${tags}`;
-    return `${header}\n\n${intro}\n\n${body}\n\n${tags}`;
+    const vocab = type === 'twitter' ? `💥 ACTION! ${res} in ${currentFight.Weight}` : `📊 Result: ${res}\n⚖️ ${currentFight.Weight}`;
+    if (type === 'insta') return `${body}\n\n${header}\n\n${vocab}\n\n${tags}`;
+    return `${header}\n\n${vocab}\n\n${body}\n\n${tags}`;
   };
 
   const regenerateCaption = () => {
@@ -150,7 +154,7 @@ export default function App() {
       sub: ["Technique wins! 🥋", "Tap out! 🐍"],
       general: ["Fireworks! 🔥", "UAE Warriors delivers! 🌍"]
     };
-    const intro = themes.general[0]; // Simplified for now
+    const intro = themes.general[0];
     updateFight({ originalStaffCaption: staff, staffCaption: `${intro} ${staff}` });
   };
 
