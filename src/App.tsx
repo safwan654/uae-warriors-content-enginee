@@ -164,12 +164,24 @@ export default function App() {
 
   const getCaptions = (type: 'insta' | 'twitter') => {
     if (!currentFight) return '';
-    const res = currentFight.resultType || 'Selection';
-    const winner = currentFight.winner;
-    let header = winner === 'red' ? `🔴🏆 ${currentFight['Red Corner']} wins` : winner === 'blue' ? `🔵🏆 ${currentFight['Blue Corner']} wins` : `🔥 ${currentFight['Red Corner']} vs ${currentFight['Blue Corner']}`;
+    const res = currentFight.resultType || 'Result';
+    const winnerType = currentFight.winner;
+    const winnerName = winnerType === 'red' ? currentFight['Red Corner'] : winnerType === 'blue' ? currentFight['Blue Corner'] : null;
+    
+    // Main Body Logic
+    let body = currentFight.staffCaption || '';
+    if (!body && winnerName) {
+      const line1 = "Kicking off with fireworks! 💥";
+      const line2 = `${res} victory for ${winnerName}.`;
+      body = `${line1}\n${line2}`;
+    } else if (!body) {
+      body = `Action-packed fight in the ${currentFight.Weight} division!`;
+    }
+
+    let header = winnerType === 'red' ? `🔴🏆 ${currentFight['Red Corner']} wins` : winnerType === 'blue' ? `🔵🏆 ${currentFight['Blue Corner']} wins` : `🔥 ${currentFight['Red Corner']} vs ${currentFight['Blue Corner']}`;
     const tags = currentFight.hashtags || '#UAEWarriors';
-    const body = currentFight.staffCaption || 'Incredible fight!';
     const vocab = type === 'twitter' ? `💥 ACTION! ${res} in ${currentFight.Weight}` : `📊 Result: ${res}\n⚖️ ${currentFight.Weight}`;
+    
     if (type === 'insta') return `${body}\n\n${header}\n\n${vocab}\n\n${tags}`;
     return `${header}\n\n${vocab}\n\n${body}\n\n${tags}`;
   };
@@ -178,6 +190,7 @@ export default function App() {
     if (!currentFight) return;
     const staff = currentFight.originalStaffCaption || currentFight.staffCaption || '';
     const res = currentFight.resultType?.toLowerCase() || '';
+    const winnerName = currentFight.winner === 'red' ? currentFight['Red Corner'] : currentFight.winner === 'blue' ? currentFight['Blue Corner'] : 'the fighter';
     
     const themes: any = {
       ko: ["KNOCKOUT! 💥", "Power unleashed! ⚡", "UNBELIEVABLE POWER! 🔥"],
@@ -192,7 +205,8 @@ export default function App() {
     else if (res.includes('decision')) selectedTheme = themes.decision;
 
     const intro = selectedTheme[Math.floor(Math.random() * selectedTheme.length)];
-    updateFight({ originalStaffCaption: staff, staffCaption: `${intro} ${staff}` });
+    const mainText = staff || `A massive ${res} performance from ${winnerName}!`;
+    updateFight({ originalStaffCaption: staff, staffCaption: `${intro}\n${mainText}` });
   };
 
   return (
