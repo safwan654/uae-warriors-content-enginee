@@ -59,6 +59,8 @@ interface Fight {
   originalStaffCaption?: string;
   instaHandle?: string;
   hashtags?: string;
+  postedX?: boolean;
+  postedInstagram?: boolean;
 }
 
 interface EventData {
@@ -143,7 +145,7 @@ export default function App() {
         header: true, skipEmptyLines: true,
         complete: (results: any) => {
           const fights = results.data.map((f: any) => ({
-            ...f, completed: false, resultType: '', round: null, winner: null, staffCaption: '', instaHandle: '', hashtags: '#UAEWarriors'
+            ...f, completed: false, resultType: '', round: null, winner: null, staffCaption: '', instaHandle: '', hashtags: '#UAEWarriors', postedX: false, postedInstagram: false
           }));
           const eId = newEventInfo.name.replace(/\s+/g, '_') || `EVENT_${Date.now()}`;
           const finalData = { id: eId, info: newEventInfo, fights };
@@ -360,11 +362,69 @@ export default function App() {
                         <div className="space-y-6">
                             {(['insta', 'twitter'] as const).map(p => (
                                 <div key={p} className="bg-black/40 rounded-2xl border border-white/10 overflow-hidden flex flex-col shadow-xl">
-                                    <div className="px-5 py-3 border-b border-white/5 flex justify-between items-center bg-white/5"><span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{p === 'insta' ? 'Instagram' : 'Twitter/X'}</span><button onClick={() => { navigator.clipboard.writeText(getCaptions(p)); setCopyFeedback(p); setTimeout(() => setCopyFeedback(null), 1000); }} className="text-[10px] font-black text-gray-400 hover:text-white uppercase ">{copyFeedback === p ? 'READY ✅' : 'COPY'}</button></div>
-                                    <div className="p-5 flex-1 h-[140px] overflow-y-auto"><pre className="text-[11px] text-gray-400 font-sans whitespace-pre-wrap leading-relaxed italic">{getCaptions(p)}</pre></div>
+                                    <div className="px-5 py-3 border-b border-white/5 flex justify-between items-center bg-white/5">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                                            {p === 'insta' ? 'Instagram' : 'Twitter/X'}
+                                        </span>
+                                        <button 
+                                            onClick={() => { navigator.clipboard.writeText(getCaptions(p)); setCopyFeedback(p); setTimeout(() => setCopyFeedback(null), 1000); }} 
+                                            className="text-[10px] font-black text-gray-400 hover:text-white uppercase"
+                                        >
+                                            {copyFeedback === p ? 'READY ✅' : 'COPY'}
+                                        </button>
+                                    </div>
+                                    <div className="p-5 flex-1 h-[140px] overflow-y-auto">
+                                        <pre className="text-[11px] text-gray-400 font-sans whitespace-pre-wrap leading-relaxed italic">
+                                            {getCaptions(p)}
+                                        </pre>
+                                    </div>
                                 </div>
                             ))}
-                            <button onClick={toggleCompleted} className={cn("w-full py-6 rounded-2xl font-black text-xs uppercase italic transition-all flex items-center justify-center gap-4 shadow-2xl border-2", currentFight.completed ? "bg-red-600/10 text-red-500 border-red-600/40 hover:bg-red-600 hover:text-white" : "bg-green-600 border-green-400 text-white")}>
+
+                            <div className="bg-[#12141c] p-6 rounded-2xl border border-white/5 space-y-4 shadow-2xl">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2 opacity-50">Content Status Confirmation</label>
+                                <div className="space-y-3">
+                                    <button 
+                                        onClick={() => updateFight({ postedX: !currentFight.postedX })}
+                                        className={cn(
+                                            "w-full p-4 rounded-xl text-[10px] font-black uppercase flex items-center justify-between transition-all border",
+                                            currentFight.postedX ? "bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.1)]" : "bg-white/5 border-white/10 text-gray-500 hover:border-blue-500/50"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={cn("w-2 h-2 rounded-full", currentFight.postedX ? "bg-blue-500" : "bg-gray-700")} />
+                                            <span>Posted to Twitter / X</span>
+                                        </div>
+                                        {currentFight.postedX ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-4 h-4 rounded-full border-2 border-white/10" />}
+                                    </button>
+                                    <button 
+                                        onClick={() => updateFight({ postedInstagram: !currentFight.postedInstagram })}
+                                        className={cn(
+                                            "w-full p-4 rounded-xl text-[10px] font-black uppercase flex items-center justify-between transition-all border",
+                                            currentFight.postedInstagram ? "bg-pink-600/20 border-pink-500 text-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.1)]" : "bg-white/5 border-white/10 text-gray-500 hover:border-pink-500/50"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={cn("w-2 h-2 rounded-full", currentFight.postedInstagram ? "bg-pink-500" : "bg-gray-700")} />
+                                            <span>Posted to Instagram</span>
+                                        </div>
+                                        {currentFight.postedInstagram ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-4 h-4 rounded-full border-2 border-white/10" />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={toggleCompleted} 
+                                disabled={!currentFight.completed && (!currentFight.postedX || !currentFight.postedInstagram)}
+                                className={cn(
+                                    "w-full py-6 rounded-2xl font-black text-xs uppercase italic transition-all flex items-center justify-center gap-4 shadow-2xl border-2", 
+                                    currentFight.completed 
+                                        ? "bg-red-600/10 text-red-500 border-red-600/40 hover:bg-red-600 hover:text-white" 
+                                        : (currentFight.postedX && currentFight.postedInstagram 
+                                            ? "bg-green-600 border-green-400 text-white hover:scale-[1.02] active:scale-95 shadow-[0_0_30px_rgba(34,197,94,0.3)]" 
+                                            : "bg-gray-800 border-white/5 text-gray-500 cursor-not-allowed opacity-50 grayscale")
+                                )}
+                            >
                                 {currentFight.completed ? <><Undo2 className="w-6 h-6"/> UNDO FIGHT</> : <><CheckCircle2 className="w-6 h-6"/> FINISH FIGHT</>}
                             </button>
                         </div>
