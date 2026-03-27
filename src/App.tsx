@@ -57,6 +57,7 @@ interface Fight {
   winner?: 'red' | 'blue' | 'draw' | null;
   staffCaption?: string;
   originalStaffCaption?: string;
+  teamIntel?: string;
   instaHandle?: string;
   hashtags?: string;
   postedX?: boolean;
@@ -145,7 +146,7 @@ export default function App() {
         header: true, skipEmptyLines: true,
         complete: (results: any) => {
           const fights = results.data.map((f: any) => ({
-            ...f, completed: false, resultType: '', round: null, winner: null, staffCaption: '', instaHandle: '', hashtags: '#UAEWarriors', postedX: false, postedInstagram: false
+            ...f, completed: false, resultType: '', round: null, winner: null, staffCaption: '', teamIntel: '', instaHandle: '', hashtags: '#UAEWarriors', postedX: false, postedInstagram: false
           }));
           const eId = newEventInfo.name.replace(/\s+/g, '_') || `EVENT_${Date.now()}`;
           const finalData = { id: eId, info: newEventInfo, fights };
@@ -212,8 +213,9 @@ export default function App() {
     let header = winnerType === 'red' ? `🔴🏆 ${currentFight['Red Corner']} wins` : winnerType === 'blue' ? `🔵🏆 ${currentFight['Blue Corner']} wins` : `🔥 ${currentFight['Red Corner']} vs ${currentFight['Blue Corner']}`;
     const tags = currentFight.hashtags || '#UAEWarriors';
     const vocab = type === 'twitter' ? `💥 ACTION! ${res}${roundTxt} in ${currentFight.Weight}` : `📊 Result: ${res}${roundTxt}\n⚖️ ${currentFight.Weight}`;
+    const handleLine = (type === 'insta' && currentFight.instaHandle) ? `${currentFight.instaHandle.startsWith('@') ? currentFight.instaHandle : '@' + currentFight.instaHandle}` : '';
     
-    if (type === 'insta') return `${body}\n\n${header}\n\n${vocab}\n\n${tags}`;
+    if (type === 'insta') return `${body}${handleLine ? '\n' + handleLine : ''}\n\n${header}\n\n${vocab}\n\n${tags}`;
     return `${header}\n\n${vocab}\n\n${body}\n\n${tags}`;
   };
 
@@ -224,73 +226,42 @@ export default function App() {
     const rd = currentFight.round ? ` Round ${currentFight.round}` : '';
     const winnerType = currentFight.winner;
     const winner = winnerType === 'red' ? currentFight['Red Corner'] : winnerType === 'blue' ? currentFight['Blue Corner'] : 'the fighter';
-    const loser = winnerType === 'red' ? currentFight['Blue Corner'] : winnerType === 'blue' ? currentFight['Red Corner'] : 'his opponent';
-    const incomingNotes = currentFight.staffCaption || '';
+    const baseIntel = currentFight.teamIntel || '';
     
-    // Clean up incoming notes (remove old result signatures if user is clicking regenerate multiple times)
-    const baseIntel = incomingNotes.split('\n')[0].replace(/at \d+:\d+/g, '').trim();
-    
-    // Detect time from notes
-    const timeMatch = incomingNotes.match(/(\d+:\d{1,2})/);
-    const timeStr = timeMatch ? ` at ${timeMatch[0]}` : '';
-
-    const resLower = res.toLowerCase();
-
-    // REWRITE TEMPLATES: These organicly weave the 'baseIntel' into a professional 15-20 word summary.
-    const rewriteTemplates = [
-        `Incredible! ${winner} secures a clinical ${res}${rd}${timeStr} after they ${baseIntel}.`,
-        `${winner} remains unstoppable! Using a professional ${res}${rd}${timeStr}, they ${baseIntel} to seal the deal.`,
-        `The arena erupted as ${winner} ${baseIntel}, leading directly to a massive ${res}${rd}${timeStr} victory.`,
-        `Absolute dominance! ${winner} ${baseIntel} to capture the ${res}${rd}${timeStr} win over ${loser} tonight.`,
-        `World-class technique on display: ${winner} ${baseIntel} for a spectacular ${res}${rd}${timeStr} finish.`,
-        `Pure determination! ${winner} battles through to ${baseIntel}, securing the ${res}${rd}${timeStr} in Abu Dhabi.`,
-        `A night to remember! ${winner} executes a perfect gameplan to ${baseIntel} and win via ${res}${rd}${timeStr}.`,
-        `${winner} shows why they are a top contender! They ${baseIntel} and clinch the ${res}${rd}${timeStr}.`,
-        `That's how it's done! ${winner} ${baseIntel} to earn a definitive ${res}${rd}${timeStr} victory over ${loser}.`,
-        `High-stakes action: ${winner} finds the path to victory as they ${baseIntel} for a ${res}${rd}${timeStr}.`,
-        `Clinical performance! ${winner} manages to ${baseIntel}, walking away with a ${res}${rd}${timeStr} victory today.`,
-        `Spectacular! ${winner} shuts the lights out after they ${baseIntel} for a highlight-reel ${res}${rd}${timeStr}.`,
-        `Tactical masterclass: ${winner} ${baseIntel} to dictate the pace and secure a professional ${res}${rd}${timeStr}.`,
-        `Heart and skill! ${winner} ${baseIntel} and remains composed to capture the ${res}${rd}${timeStr} win.`,
-        `Total control! ${winner} executes a massive ${res}${rd}${timeStr} shortly after they ${baseIntel}.`,
-        `${winner} is the victor! A stunning ${res}${rd}${timeStr} comes through after they ${baseIntel} tonight.`,
-        `History made! ${winner} uses a technical ${res}${rd}${timeStr} to finish the fight once they ${baseIntel}.`
+    // Interesting Openers (adds professional hype)
+    const openers = [
+        "History made! ", "Incredible! ", "Pure elite skill! ", "The arena erupted! ", 
+        "Absolute dominance! ", "A tactical masterpiece! ", "Stunning performance! ",
+        "Abu Dhabi witnessess greatness! ", "Total striking clinical! ", "High-level action! ",
+        "Spectacular finish! ", "The warrior spirit is alive! "
     ];
 
-    // FALLBACK TEMPLATES (If no notes are present)
-    const fallbackTemplates = {
-        ko: [
-            `Striking masterclass! ${winner} secures a massive ${res} victory${rd}${timeStr} in an explosive performance against ${loser}.`,
-            `Highlight reel power! ${winner} shuts the lights out with a devastating ${res}${rd}${timeStr} win in Abu Dhabi.`,
-            `The heavy hitter strikes again! ${winner} captures a professional ${res}${rd}${timeStr} stoppage victory today.`
-        ],
-        sub: [
-            `Grappling clinic! ${winner} shows elite ground technique to secure a smooth ${res}${rd}${timeStr} win tonight.`,
-            `Submission masterclass! ${winner} finds the opening and locks in the ${res}${rd}${timeStr} victory over ${loser}.`,
-            `No escape! ${winner} dictates the transition and captures a technical ${res}${rd}${timeStr} against ${loser}.`
-        ],
-        decision: [
-            `Tactical brilliance! ${winner} out-lands and out-maneuvers ${loser} to earn a professional ${res} win tonight.`,
-            `Superior pacing! ${winner} controls the rhythm over 15 minutes to secure a hard-fought ${res} victory.`,
-            `Technical dominance! The judges award ${winner} a clear ${res} win after a significant tactical battle.`
-        ]
-    };
+    // Clinical Closers (summarizes the outcome)
+    const closers = [
+        " to finish the fight in dominant fashion.",
+        " to seal a defining victory here in Abu Dhabi.",
+        " clinching a spectacular win tonight.",
+        " walking away with a high-level professional victory.",
+        " proving once again they are a force in the division.",
+        " and remains undefeated in spirit tonight.",
+        " for a highlight-reel conclusion to this battle.",
+        " in what will be remembered as a classic UAE Warriors moment.",
+        ". A professional display of technique and will."
+    ];
 
-    let result;
-    if (baseIntel.length > 5) {
-        // We have specific notes, so we REWRITE
-        const chosen = rewriteTemplates[Math.floor(Math.random() * rewriteTemplates.length)];
-        result = chosen;
+    const opener = openers[Math.floor(Math.random() * openers.length)];
+    const closer = closers[Math.floor(Math.random() * closers.length)];
+
+    let finalCaption = "";
+    if (baseIntel.length > 3) {
+        // We have team intel, so we enhance it with respect
+        finalCaption = `${opener}${winner} ${baseIntel}${closer}`;
     } else {
-        // No notes, use a FALLBACK
-        let pool = fallbackTemplates.decision;
-        if (resLower.includes('ko') || resLower.includes('tko')) pool = fallbackTemplates.ko;
-        else if (resLower.includes('sub') || resLower.includes('tap')) pool = fallbackTemplates.sub;
-        
-        result = pool[Math.floor(Math.random() * pool.length)];
+        // Fallback if no team intel
+        finalCaption = `${opener}${winner} captures a professional ${res}${rd} victory.`;
     }
     
-    updateFight({ staffCaption: result });
+    updateFight({ staffCaption: finalCaption });
   };
 
   return (
@@ -383,9 +354,15 @@ export default function App() {
                                     <input type="text" value={currentFight.instaHandle} onChange={(e) => updateFight({ instaHandle: e.target.value })} placeholder="@FIGHTER_HANDLE" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-xs font-black focus:border-red-500 outline-none" />
                                     <input type="text" value={currentFight.hashtags} onChange={(e) => updateHashtagsGlobally(e.target.value)} placeholder="#UAEWARRIORS68" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-xs font-black focus:border-red-500 outline-none border-dashed border-red-500/50" title="Changes hashtags for ALL fights in this event" />
                                 </div>
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center"><label className="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Live Staff Intel</label><button onClick={regenerateCaption} className="text-[10px] text-red-500 font-black uppercase flex items-center gap-1.5 hover:text-white transition-all transform active:scale-95"><Sparkles className="w-3.5 h-3.5"/> REGENERATE INTRO</button></div>
-                                    <textarea value={currentFight.staffCaption} onChange={(e) => updateFight({ staffCaption: e.target.value })} placeholder="Type cageside updates..." className="w-full h-44 bg-black/40 border border-white/10 rounded-xl p-5 text-sm font-bold focus:border-red-500 outline-none resize-none" />
+                                <div className="space-y-6">
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center"><label className="text-[10px] font-black text-gray-500 uppercase italic tracking-widest pl-2">1. Team Professional Intel</label></div>
+                                        <textarea value={currentFight.teamIntel} onChange={(e) => updateFight({ teamIntel: e.target.value })} placeholder="Paste professional staff notes/caption here..." className="w-full h-32 bg-black/40 border-2 border-dashed border-white/5 rounded-xl p-5 text-sm font-bold focus:border-red-500 outline-none resize-none" />
+                                    </div>
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center"><label className="text-[10px] font-black text-white uppercase italic tracking-widest pl-2">2. Live AI Narrative </label><button onClick={regenerateCaption} className="text-[10px] text-red-500 font-black uppercase flex items-center gap-1.5 hover:text-white transition-all transform active:scale-95 bg-white/5 px-3 py-1.5 rounded-full"><Sparkles className="w-3.5 h-3.5"/> REGENERATE</button></div>
+                                        <textarea value={currentFight.staffCaption} onChange={(e) => updateFight({ staffCaption: e.target.value })} placeholder="AI will enhance team intel here..." className="w-full h-32 bg-red-600/5 border border-red-500/20 rounded-xl p-5 text-sm font-bold focus:border-red-500 outline-none resize-none text-red-50" />
+                                    </div>
                                 </div>
                             </div>
                         </div>
