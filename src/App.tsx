@@ -56,6 +56,7 @@ interface Fight {
   round?: number | null;
   winner?: 'red' | 'blue' | 'draw' | null;
   staffCaption?: string;
+  xCaption?: string;
   originalStaffCaption?: string;
   teamIntel?: string;
   instaHandle?: string;
@@ -146,7 +147,7 @@ export default function App() {
         header: true, skipEmptyLines: true,
         complete: (results: any) => {
           const fights = results.data.map((f: any) => ({
-            ...f, completed: false, resultType: '', round: null, winner: null, staffCaption: '', teamIntel: '', instaHandle: '', hashtags: '#UAEWarriors', postedX: false, postedInstagram: false
+            ...f, completed: false, resultType: '', round: null, winner: null, staffCaption: '', xCaption: '', teamIntel: '', instaHandle: '', hashtags: '#UAEWarriors', postedX: false, postedInstagram: false
           }));
           const eId = newEventInfo.name.replace(/\s+/g, '_') || `EVENT_${Date.now()}`;
           const finalData = { id: eId, info: newEventInfo, fights };
@@ -203,7 +204,8 @@ export default function App() {
     const winnerName = winnerType === 'red' ? currentFight['Red Corner'] : winnerType === 'blue' ? currentFight['Blue Corner'] : null;
     
     // Main Body Logic
-    let body = currentFight.staffCaption || '';
+    let body = type === 'insta' ? (currentFight.staffCaption || '') : (currentFight.xCaption || '');
+    
     if (!body && winnerName) {
       const line1 = "Kicking off with fireworks! 💥";
       const line2 = `${res}${roundTxt} victory for ${winnerName}.`;
@@ -228,48 +230,87 @@ export default function App() {
     const winner = winnerType === 'red' ? currentFight['Red Corner'] : winnerType === 'blue' ? currentFight['Blue Corner'] : 'the fighter';
     const baseIntel = currentFight.teamIntel || '';
     
-    // Interesting Openers (adds professional hype)
-    const openers = [
-        "History made! ", "Incredible! ", "Pure elite skill! ", "The arena erupted! ", 
-        "Absolute dominance! ", "A tactical masterpiece! ", "Stunning performance! ",
-        "Abu Dhabi witnessess greatness! ", "Total striking clinical! ", "High-level action! ",
-        "Spectacular finish! ", "The warrior spirit is alive! "
-    ];
-
-    // Clinical Closers (summarizes the outcome)
-    const closers = [
-        " to finish the fight in dominant fashion.",
-        " to seal a defining victory here in Abu Dhabi.",
-        " clinching a spectacular win tonight.",
-        " walking away with a high-level professional victory.",
-        " proving once again they are a force in the division.",
-        " and remains undefeated in spirit tonight.",
-        " for a highlight-reel conclusion to this battle.",
-        " in what will be remembered as a classic UAE Warriors moment.",
-        ". A professional display of technique and will."
-    ];
-
-    const opener = openers[Math.floor(Math.random() * openers.length)];
-    const closer = closers[Math.floor(Math.random() * closers.length)];
-
-    let finalCaption = "";
-    if (baseIntel.length > 3) {
-        // We have team intel, so we enhance it with respect
-        // Check if the team intel already contains the winner's name to avoid repetition
-        const alreadyHasName = baseIntel.toLowerCase().includes(winner.toLowerCase());
-        const subject = alreadyHasName ? "" : `${winner} `;
+    // 30+ MASSIVE Openers Pool with Platform-Specific Emojis
+    const getOpeners = (isInsta: boolean) => {
+        const instaEmojis = ["🔥 ", "📸 ", "✨ ", "🥋 ", "🏆 ", "📊 ", "🌟 ", "💥 "];
+        const xEmojis = ["⚡ ", "🚨 ", "🥊 ", "🌪️ ", "📉 ", "📈 ", "👑 ", "🌊 "];
+        const e = isInsta ? instaEmojis : xEmojis;
+        const pick = () => e[Math.floor(Math.random() * e.length)];
         
-        // Clean up punctuation (ensure single period ending if we add closer)
-        let cleanIntel = baseIntel.trim();
-        if (cleanIntel.endsWith('.')) cleanIntel = cleanIntel.slice(0, -1);
+        return [
+            `${pick()}History made! `, `${pick()}Incredible! `, `${pick()}Pure elite skill! `, `${pick()}The arena erupted! `, 
+            `${pick()}Absolute dominance! `, `${pick()}A tactical masterpiece! `, `${pick()}Stunning performance! `,
+            `${pick()}Abu Dhabi witnessess greatness! `, `${pick()}Total striking clinical! `, `${pick()}High-level action! `,
+            `${pick()}Spectacular finish! `, `${pick()}The warrior spirit is alive! `, `${pick()}Unbelievable scenes! `,
+            `${pick()}A masterclass in the cage! `, `${pick()}Pure heart! `, `${pick()}What a moment in the capital! `,
+            `${pick()}Sensational effort! `, `${pick()}The judges are stunned! `, `${pick()}A defining career win! `,
+            `${pick()}The crowd is on its feet! `, `${pick()}Clinical execution! `, `${pick()}Pure fireworks tonight! `,
+            `${pick()}Warrior mentality! `, `${pick()}Simply world-class! `, `${pick()}Abu Dhabi is roaring! `,
+            `${pick()}Inspirational effort! `, `${pick()}A total dismantling! `, `${pick()}The momentum shifts! `,
+            `${pick()}Everything on the line! `, `${pick()}The results are in! `, `${pick()}A legacy defining victory! `
+        ];
+    };
 
-        finalCaption = `${opener}${subject}${cleanIntel}${closer}`;
-    } else {
-        // Fallback if no team intel
-        finalCaption = `${opener}${winner} captures a professional ${res}${rd} victory.`;
-    }
-    
-    updateFight({ staffCaption: finalCaption });
+    // 30+ MASSIVE Closers Pool
+    const getClosers = (isInsta: boolean) => {
+        const instaEmojis = [" ✨", " 🇦🇪", " 🥋", " 🔥", " 🥇"];
+        const xEmojis = [" ⚡", " 👊", " 🚨", " 🌪️", " 👑"];
+        const e = isInsta ? instaEmojis : xEmojis;
+        const pick = () => e[Math.floor(Math.random() * e.length)];
+
+        return [
+            ` to finish the fight in dominant fashion.${pick()}`,
+            ` to seal a defining victory here in Abu Dhabi.${pick()}`,
+            ` clinching a spectacular win tonight.${pick()}`,
+            ` walking away with a high-level professional victory.${pick()}`,
+            ` proving once again they are a force in the division.${pick()}`,
+            ` and remains undefeated in spirit tonight.${pick()}`,
+            ` for a highlight-reel conclusion to this battle.${pick()}`,
+            ` in what will be remembered as a classic UAE Warriors moment.${pick()}`,
+            `. A professional display of technique and will.${pick()}`,
+            ` to capture the hearts of the Abu Dhabi fans.${pick()}`,
+            ` and leaves the octagon as the definitive victor.${pick()}`,
+            ` with a performance for the history books.${pick()}`,
+            ` to earn their place among the elite in the cage.${pick()}`,
+            ` as the arena continues to echo with applause.${pick()}`,
+            ` in a staggering showcase of mixed martial arts.${pick()}`,
+            ` for a high-energy finish to their intense battle.${pick()}`,
+            ` as the result is officially read by the announcer.${pick()}`,
+            ` to celebrate a truly incredible professional win.${pick()}`,
+            ` in what was a tactical clinic from start to finish.${pick()}`,
+            ` and remains the one to watch in this weight class.${pick()}`,
+            `. The excellence of UAE Warriors was on full display.${pick()}`,
+            ` in a total masterclass performance tonight.${pick()}`,
+            ` and makes it look easy in the center of the cage.${pick()}`,
+            ` for a stunning professional victory in the desert.${pick()}`,
+            ` to silence the skeptics and claim the cage.${pick()}`,
+            ` and secures the professional victory they earned.${pick()}`,
+            ` in a defining moment for their professional career.${pick()}`,
+            ` to earn massive respect from the cageside staff.${pick()}`,
+            ` to capture a spectacular professional win here.${pick()}`
+        ];
+    };
+
+    const generateSpecific = (isInsta: boolean) => {
+        const ops = getOpeners(isInsta);
+        const cls = getClosers(isInsta);
+        const opener = ops[Math.floor(Math.random() * ops.length)];
+        const closer = cls[Math.floor(Math.random() * cls.length)];
+        
+        if (baseIntel.length > 3) {
+            const alreadyHasName = baseIntel.toLowerCase().includes(winner.toLowerCase());
+            const subject = alreadyHasName ? "" : `${winner} `;
+            let cleanIntel = baseIntel.trim();
+            if (cleanIntel.endsWith('.')) cleanIntel = cleanIntel.slice(0, -1);
+            return `${opener}${subject}${cleanIntel}${closer}`;
+        }
+        return `${opener}${winner} captures a professional ${res}${rd} victory.`;
+    };
+
+    updateFight({ 
+        staffCaption: generateSpecific(true),
+        xCaption: generateSpecific(false)
+    });
   };
 
   return (
@@ -368,8 +409,12 @@ export default function App() {
                                         <textarea value={currentFight.teamIntel} onChange={(e) => updateFight({ teamIntel: e.target.value })} placeholder="Paste professional staff notes/caption here..." className="w-full h-32 bg-black/40 border-2 border-dashed border-white/5 rounded-xl p-5 text-sm font-bold focus:border-red-500 outline-none resize-none" />
                                     </div>
                                     <div className="space-y-3">
-                                        <div className="flex justify-between items-center"><label className="text-[10px] font-black text-white uppercase italic tracking-widest pl-2">2. Live AI Narrative </label><button onClick={regenerateCaption} className="text-[10px] text-red-500 font-black uppercase flex items-center gap-1.5 hover:text-white transition-all transform active:scale-95 bg-white/5 px-3 py-1.5 rounded-full"><Sparkles className="w-3.5 h-3.5"/> REGENERATE</button></div>
-                                        <textarea value={currentFight.staffCaption} onChange={(e) => updateFight({ staffCaption: e.target.value })} placeholder="AI will enhance team intel here..." className="w-full h-32 bg-red-600/5 border border-red-500/20 rounded-xl p-5 text-sm font-bold focus:border-red-500 outline-none resize-none text-red-50" />
+                                        <div className="flex justify-between items-center"><label className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest pl-2">2. Instagram Narrative </label><button onClick={regenerateCaption} className="text-[10px] text-red-500 font-black uppercase flex items-center gap-1.5 hover:text-white transition-all transform active:scale-95 bg-white/5 px-3 py-1.5 rounded-full"><Sparkles className="w-3.5 h-3.5"/> REGENERATE BOTH</button></div>
+                                        <textarea value={currentFight.staffCaption} onChange={(e) => updateFight({ staffCaption: e.target.value })} placeholder="AI will enhance team intel for Instagram..." className="w-full h-24 bg-blue-600/5 border border-blue-500/20 rounded-xl p-4 text-[11px] font-bold focus:border-blue-500 outline-none resize-none text-blue-50" />
+                                    </div>
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center"><label className="text-[10px] font-black text-gray-500 uppercase italic tracking-widest pl-2">3. Twitter/X Narrative </label></div>
+                                        <textarea value={currentFight.xCaption} onChange={(e) => updateFight({ xCaption: e.target.value })} placeholder="AI will enhance team intel for X..." className="w-full h-24 bg-white/5 border border-white/10 rounded-xl p-4 text-[11px] font-bold focus:border-red-500 outline-none resize-none text-gray-300" />
                                     </div>
                                 </div>
                             </div>
