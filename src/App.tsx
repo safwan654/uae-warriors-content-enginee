@@ -255,7 +255,15 @@ export default function App() {
     let finalCaption = "";
     if (baseIntel.length > 3) {
         // We have team intel, so we enhance it with respect
-        finalCaption = `${opener}${winner} ${baseIntel}${closer}`;
+        // Check if the team intel already contains the winner's name to avoid repetition
+        const alreadyHasName = baseIntel.toLowerCase().includes(winner.toLowerCase());
+        const subject = alreadyHasName ? "" : `${winner} `;
+        
+        // Clean up punctuation (ensure single period ending if we add closer)
+        let cleanIntel = baseIntel.trim();
+        if (cleanIntel.endsWith('.')) cleanIntel = cleanIntel.slice(0, -1);
+
+        finalCaption = `${opener}${subject}${cleanIntel}${closer}`;
     } else {
         // Fallback if no team intel
         finalCaption = `${opener}${winner} captures a professional ${res}${rd} victory.`;
