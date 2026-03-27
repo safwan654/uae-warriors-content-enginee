@@ -225,79 +225,72 @@ export default function App() {
     const winnerType = currentFight.winner;
     const winner = winnerType === 'red' ? currentFight['Red Corner'] : winnerType === 'blue' ? currentFight['Blue Corner'] : 'the fighter';
     const loser = winnerType === 'red' ? currentFight['Blue Corner'] : winnerType === 'blue' ? currentFight['Red Corner'] : 'his opponent';
-    const notes = currentFight.staffCaption || '';
+    const incomingNotes = currentFight.staffCaption || '';
     
-    // Extract time from notes if present (e.g. "1:23")
-    const timeMatch = notes.match(/(\d+:\d{1,2})/);
+    // Clean up incoming notes (remove old result signatures if user is clicking regenerate multiple times)
+    const baseIntel = incomingNotes.split('\n')[0].replace(/at \d+:\d+/g, '').trim();
+    
+    // Detect time from notes
+    const timeMatch = incomingNotes.match(/(\d+:\d{1,2})/);
     const timeStr = timeMatch ? ` at ${timeMatch[0]}` : '';
-    
-    // Process notes (strip time for cleaner integration)
-    const cleanNotes = notes.replace(/(\d+:\d{1,2})/, '').trim();
-    const intelClause = cleanNotes.length > 5 ? `\n\nLive Intel: "${cleanNotes}"` : '';
 
     const resLower = res.toLowerCase();
 
-    const templates: any = {
-      ko: [
-        `Kicking off with absolute fireworks! A striking masterclass ends with a massive ${res} victory${rd}${timeStr} for ${winner} over ${loser}.`,
-        `Pure explosive power on display! ${winner} shuts the lights out with a devastating ${res}${rd}${timeStr} against ${loser} in ${currentFight.Weight}.`,
-        `The arena is electric! ${winner} finds the target and secures a highlight-reel ${res}${rd}${timeStr} victory over ${loser} today.`,
-        `Stunning performance from the heavy hitter! ${winner} clinches a professional ${res}${rd}${timeStr} stoppage against ${loser} at UAE Warriors.`,
-        `BRUTAL! ${winner} connects with a clean shot to secure the ${res}${rd}${timeStr} win. ${loser} was unable to weather the storm.`,
-        `Total striking dominance from start to finish! ${winner} takes home the ${res} win${rd}${timeStr} in a clinical performance against ${loser}.`,
-        `Abu Dhabi just witnessed a SPECTACULAR ${res}${rd}${timeStr} knockout! ${winner} is the victor in a clash of titans.`,
-        `UNBELIEVABLE POWER! ${winner} ends the night early with a massive ${res}${rd}${timeStr} over a dangerous ${loser}.`,
-        `Technical precision meets raw power! ${winner} secures the ${res}${rd}${timeStr} victory in the ${currentFight.Weight} division.`,
-        `The main stage belongs to ${winner}! A clinical finish leads to a ${res} win${rd}${timeStr} tonight against ${loser}.`,
-        `HIGHTLIGHT REEL! ${winner} captures a massive ${res}${rd}${timeStr} over ${loser} in an unforgettable battle.`
-      ],
-      sub: [
-        `A grappling clinic in the cage! ${winner} shows elite technique with a ${res}${rd}${timeStr} win over ${loser} in a thrilling battle.`,
-        `The mats don't lie! ${winner} dictates the ground game and finds the opening for a ${res}${rd}${timeStr} finish against ${loser}.`,
-        `World-class Brazilian Jiu-Jitsu on display! ${winner} locks in the victory with a smooth ${res}${rd}${timeStr} over ${loser} tonight.`,
-        `Total dominance on the floor! ${winner} remains undefeated in the scramble, securing a technical ${res}${rd}${timeStr} against ${loser}.`,
-        `SENSATIONAL GRAPPLING! ${winner} secures the ${res}${rd}${timeStr} after a masterful adjustment on the ground.`,
-        `The high-level submission game of ${winner} was too much! A slick ${res}${rd}${timeStr} finish over ${loser}.`,
-        `Elite submission skills from ${winner}! Forcing the tap${rd}${timeStr} against a game ${loser} at UAE Warriors.`,
-        `The Jiu-Jitsu masterclass continues! ${winner} finds the opening and secures a beautiful ${res}${rd}${timeStr} tonight.`,
-        `No escape! ${winner} locks in a deep ${res}${rd}${timeStr} to finish the fight against ${loser} in dominant fashion.`,
-        `Technique and patience! ${winner} waits for the opening and captures a professional ${res}${rd}${timeStr} sub win.`,
-        `Total ground control! ${winner} navigates the transition and secures a fight-ending ${res}${rd}${timeStr} against ${loser}.`
-      ],
-      decision: [
-        `A tactical masterclass for the ages! ${winner} outworks ${loser} over three intense rounds to earn a professional ${res}.`,
-        `Pure war of attrition in the cage! ${winner} shows superior cardio and pacing to secure a hard-fought ${res} over ${loser}.`,
-        `Back and forth action from the first bell! ${winner} edges out a dangerous ${loser} via a technical ${res} victory.`,
-        `The judges have spoken! ${winner} controls the pace and the distance to claim a dominant ${res} against ${loser} here.`,
-        `A high-level chess match! ${winner} uses superior octagon control to secure a ${res} outcome tonight in Abu Dhabi.`,
-        `Durability meets skill! ${winner} battles through three rounds to take home a professional ${res} win over ${loser}.`,
-        `The scorecards are in! ${winner} remains focused and secures a well-earned ${res} victory after 15 minutes of action.`,
-        `Consistency was key! ${winner} dictates the rhythm from round one to round three, earning a ${res} over ${loser}.`,
-        `A technical displaying of pacing! ${winner} out-lands and out-maneuvers ${loser} to secure the ${res}.`,
-        `Gritty and determined! ${winner} survives the early pressure to come back and win a ${res} against ${loser}.`,
-        `Precision over volume! ${winner} makes every strike count, impressing the judges to earn a clear ${res}.`
-      ],
-      general: [
-        `High-stakes action from Abu Dhabi! ${winner} proves too much for ${loser}, clinching a definitive ${res}${rd}${timeStr} win in the cage.`,
-        `The UAE Warriors crowd is roaring! ${winner} captures a significant professional win over ${loser} via a tactical ${res}${rd}${timeStr}.`,
-        `Incredible heart from both warriors! ${winner} eventually finds the path to victory against ${loser} with a solid ${res}${rd}${timeStr}.`,
-        `A night to remember in the capital! ${winner} secures a crucial victory over ${loser} via ${res}${rd}${timeStr}.`,
-        `The momentum continues for ${winner}! A massive win tonight${rd}${timeStr} using a professional ${res} approach.`,
-        `Pure Determination! ${winner} remains composed and clinical to secure the ${res}${rd}${timeStr} win in the desert.`,
-        `Elite competition! ${winner} shows why they are a top contender with a ${res}${rd}${timeStr} win over ${loser}.`,
-        `Professionalism in the octagon! ${winner} executes the game plan perfectly to earn a ${res}${rd}${timeStr} victory.`
-      ]
+    // REWRITE TEMPLATES: These organicly weave the 'baseIntel' into a professional 15-20 word summary.
+    const rewriteTemplates = [
+        `Incredible! ${winner} secures a clinical ${res}${rd}${timeStr} after they ${baseIntel}.`,
+        `${winner} remains unstoppable! Using a professional ${res}${rd}${timeStr}, they ${baseIntel} to seal the deal.`,
+        `The arena erupted as ${winner} ${baseIntel}, leading directly to a massive ${res}${rd}${timeStr} victory.`,
+        `Absolute dominance! ${winner} ${baseIntel} to capture the ${res}${rd}${timeStr} win over ${loser} tonight.`,
+        `World-class technique on display: ${winner} ${baseIntel} for a spectacular ${res}${rd}${timeStr} finish.`,
+        `Pure determination! ${winner} battles through to ${baseIntel}, securing the ${res}${rd}${timeStr} in Abu Dhabi.`,
+        `A night to remember! ${winner} executes a perfect gameplan to ${baseIntel} and win via ${res}${rd}${timeStr}.`,
+        `${winner} shows why they are a top contender! They ${baseIntel} and clinch the ${res}${rd}${timeStr}.`,
+        `That's how it's done! ${winner} ${baseIntel} to earn a definitive ${res}${rd}${timeStr} victory over ${loser}.`,
+        `High-stakes action: ${winner} finds the path to victory as they ${baseIntel} for a ${res}${rd}${timeStr}.`,
+        `Clinical performance! ${winner} manages to ${baseIntel}, walking away with a ${res}${rd}${timeStr} victory today.`,
+        `Spectacular! ${winner} shuts the lights out after they ${baseIntel} for a highlight-reel ${res}${rd}${timeStr}.`,
+        `Tactical masterclass: ${winner} ${baseIntel} to dictate the pace and secure a professional ${res}${rd}${timeStr}.`,
+        `Heart and skill! ${winner} ${baseIntel} and remains composed to capture the ${res}${rd}${timeStr} win.`,
+        `Total control! ${winner} executes a massive ${res}${rd}${timeStr} shortly after they ${baseIntel}.`,
+        `${winner} is the victor! A stunning ${res}${rd}${timeStr} comes through after they ${baseIntel} tonight.`,
+        `History made! ${winner} uses a technical ${res}${rd}${timeStr} to finish the fight once they ${baseIntel}.`
+    ];
+
+    // FALLBACK TEMPLATES (If no notes are present)
+    const fallbackTemplates = {
+        ko: [
+            `Striking masterclass! ${winner} secures a massive ${res} victory${rd}${timeStr} in an explosive performance against ${loser}.`,
+            `Highlight reel power! ${winner} shuts the lights out with a devastating ${res}${rd}${timeStr} win in Abu Dhabi.`,
+            `The heavy hitter strikes again! ${winner} captures a professional ${res}${rd}${timeStr} stoppage victory today.`
+        ],
+        sub: [
+            `Grappling clinic! ${winner} shows elite ground technique to secure a smooth ${res}${rd}${timeStr} win tonight.`,
+            `Submission masterclass! ${winner} finds the opening and locks in the ${res}${rd}${timeStr} victory over ${loser}.`,
+            `No escape! ${winner} dictates the transition and captures a technical ${res}${rd}${timeStr} against ${loser}.`
+        ],
+        decision: [
+            `Tactical brilliance! ${winner} out-lands and out-maneuvers ${loser} to earn a professional ${res} win tonight.`,
+            `Superior pacing! ${winner} controls the rhythm over 15 minutes to secure a hard-fought ${res} victory.`,
+            `Technical dominance! The judges award ${winner} a clear ${res} win after a significant tactical battle.`
+        ]
     };
 
-    let selectedTemplates = templates.general;
-    if (resLower.includes('ko') || resLower.includes('tko')) selectedTemplates = templates.ko;
-    else if (resLower.includes('sub') || resLower.includes('tap')) selectedTemplates = templates.sub;
-    else if (resLower.includes('decision') || resLower.includes('draw')) selectedTemplates = templates.decision;
-
-    const chosenTemplate = selectedTemplates[Math.floor(Math.random() * selectedTemplates.length)];
-    const finalCaption = `${chosenTemplate}${intelClause}`;
+    let result;
+    if (baseIntel.length > 5) {
+        // We have specific notes, so we REWRITE
+        const chosen = rewriteTemplates[Math.floor(Math.random() * rewriteTemplates.length)];
+        result = chosen;
+    } else {
+        // No notes, use a FALLBACK
+        let pool = fallbackTemplates.decision;
+        if (resLower.includes('ko') || resLower.includes('tko')) pool = fallbackTemplates.ko;
+        else if (resLower.includes('sub') || resLower.includes('tap')) pool = fallbackTemplates.sub;
+        
+        result = pool[Math.floor(Math.random() * pool.length)];
+    }
     
-    updateFight({ staffCaption: finalCaption });
+    updateFight({ staffCaption: result });
   };
 
   return (
