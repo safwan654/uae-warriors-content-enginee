@@ -57,6 +57,9 @@ interface Fight {
   winner?: 'red' | 'blue' | 'draw' | null;
   staffCaption?: string;
   xCaption?: string;
+  journeyCaption?: string;
+  record?: string;
+  streak?: string;
   originalStaffCaption?: string;
   teamIntel?: string;
   instaHandle?: string;
@@ -147,7 +150,7 @@ export default function App() {
         header: true, skipEmptyLines: true,
         complete: (results: any) => {
           const fights = results.data.map((f: any) => ({
-            ...f, completed: false, resultType: '', round: null, winner: null, staffCaption: '', xCaption: '', teamIntel: '', instaHandle: '', hashtags: '#UAEWarriors', postedX: false, postedInstagram: false
+            ...f, completed: false, resultType: '', round: null, winner: null, staffCaption: '', xCaption: '', teamIntel: '', instaHandle: '', hashtags: '#UAEWarriors', postedX: false, postedInstagram: false, record: '', streak: '', journeyCaption: ''
           }));
           const eId = newEventInfo.name.replace(/\s+/g, '_') || `EVENT_${Date.now()}`;
           const finalData = { id: eId, info: newEventInfo, fights };
@@ -216,9 +219,10 @@ export default function App() {
     const tags = currentFight.hashtags || '#UAEWarriors';
     const vocab = type === 'twitter' ? `💥 ACTION! ${res}${roundTxt} in ${currentFight.Weight}` : `📊 Result: ${res}${roundTxt}\n⚖️ ${currentFight.Weight}`;
     const handleLine = (type === 'insta' && currentFight.instaHandle) ? `${currentFight.instaHandle.startsWith('@') ? currentFight.instaHandle : '@' + currentFight.instaHandle}` : '';
+    const journey = currentFight.journeyCaption ? `\n\n${currentFight.journeyCaption}` : '';
     
-    if (type === 'insta') return `${body}${handleLine ? '\n' + handleLine : ''}\n\n${header}\n\n${vocab}\n\n${tags}`;
-    return `${header}\n\n${vocab}\n\n${body}\n\n${tags}`;
+    if (type === 'insta') return `${body}${journey}${handleLine ? '\n' + handleLine : ''}\n\n${header}\n\n${vocab}\n\n${tags}`;
+    return `${header}\n\n${vocab}\n\n${body}${journey}\n\n${tags}`;
   };
 
   const regenerateCaption = () => {
@@ -313,6 +317,39 @@ export default function App() {
     });
   };
 
+  const generateJourney = () => {
+      if (!currentFight) return;
+      const winnerName = currentFight.winner === 'red' ? currentFight['Red Corner'] : currentFight['Blue Corner'];
+      const record = currentFight.record || '';
+      const streak = currentFight.streak || '';
+      
+      const openers = [
+          "Rising through the ranks, ", "A massive step forward! ", "The ascent continues as ", "History in the making: ",
+          "Solidifying their spot as a contender, ", "One for the highlight reels: ", "Building a legacy, ", "A career milestone! ", "Defining a warrior's journey: "
+      ];
+
+      const closers = [
+          " to capture another signature UAE Warriors win.",
+          " while maintaining a professional edge in the cage.",
+          " with a performance that will echo across Abu Dhabi tonight.",
+          " proving once again they are the one to watch.",
+          " to keep their massive momentum building towards a title shot.",
+          " in what was a tactical clinic through and through."
+      ];
+
+      const opener = openers[Math.floor(Math.random() * openers.length)];
+      const closer = closers[Math.floor(Math.random() * closers.length)];
+      
+      const middle = record && streak 
+        ? `${winnerName} moves to ${record} with their ${streak}`
+        : record ? `${winnerName} extends their record to ${record}`
+        : streak ? `${winnerName} continues their dominant ${streak}`
+        : `${winnerName}`;
+
+      const finalJourney = `${opener}${middle}${closer}`;
+      updateFight({ journeyCaption: finalJourney });
+  };
+
   return (
     <div className="min-h-screen bg-[#05060a] text-white flex flex-col font-sans selection:bg-red-600/50">
       <div className={cn("px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.3em] flex justify-between items-center bg-black border-b transition-colors", isLive ? "border-green-600" : "border-yellow-600")}>
@@ -363,14 +400,16 @@ export default function App() {
             ) : (
                 <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
                     <div className="grid grid-cols-1 lg:grid-cols-3 bg-[#12141c] rounded-2xl border border-white/10 overflow-hidden shadow-2xl relative">
-                        <div className={cn("p-10 text-right border-r border-white/5 transition-all", currentFight.winner === 'red' && 'bg-red-600/20')}>
+                        <div className={cn("p-10 text-right border-r border-white/5 transition-all relative group", currentFight.winner === 'red' && 'bg-red-600/20')}>
                            <div className="text-red-500 text-[10px] font-black tracking-widest uppercase mb-2">Red Corner</div>
                            <h2 className="text-3xl font-black uppercase italic leading-none">{currentFight['Red Corner']}</h2>
+                           <button onClick={() => window.open(`https://www.tapology.com/search?term=${currentFight['Red Corner']}`, '_blank')} className="absolute bottom-4 right-4 text-[9px] bg-white/5 text-gray-500 px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600 hover:text-white uppercase font-black">Tapology Lookup</button>
                         </div>
                         <div className="bg-black/20 flex flex-col items-center justify-center p-6"><div className="bg-white/10 px-4 py-1 rounded-full text-[10px] font-black uppercase italic mb-2 tracking-widest text-gray-400">{currentFight.Weight}</div><div className="text-gray-700 font-black italic text-2xl uppercase opacity-40">VS</div></div>
-                        <div className={cn("p-10 text-left border-l border-white/5 transition-all", currentFight.winner === 'blue' && 'bg-blue-600/20')}>
+                        <div className={cn("p-10 text-left border-l border-white/5 transition-all relative group", currentFight.winner === 'blue' && 'bg-blue-600/20')}>
                            <div className="text-blue-500 text-[10px] font-black tracking-widest uppercase mb-2">Blue Corner</div>
                            <h2 className="text-3xl font-black uppercase italic leading-none">{currentFight['Blue Corner']}</h2>
+                           <button onClick={() => window.open(`https://www.tapology.com/search?term=${currentFight['Blue Corner']}`, '_blank')} className="absolute bottom-4 left-4 text-[9px] bg-white/5 text-gray-500 px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-all hover:bg-blue-600 hover:text-white uppercase font-black">Tapology Lookup</button>
                         </div>
                     </div>
 
@@ -415,6 +454,16 @@ export default function App() {
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-center"><label className="text-[10px] font-black text-gray-500 uppercase italic tracking-widest pl-2">3. Twitter/X Narrative </label></div>
                                         <textarea value={currentFight.xCaption} onChange={(e) => updateFight({ xCaption: e.target.value })} placeholder="AI will enhance team intel for X..." className="w-full h-24 bg-white/5 border border-white/10 rounded-xl p-4 text-[11px] font-bold focus:border-red-500 outline-none resize-none text-gray-300" />
+                                    </div>
+                                    <div className="bg-black/40 border-2 border-dashed border-green-500/20 rounded-2xl p-6 space-y-6">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2"><label className="text-[10px] font-black text-gray-600 uppercase tracking-widest pl-2">Record</label><input type="text" value={currentFight.record} onChange={(e) => updateFight({ record: e.target.value })} placeholder="8-2" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs font-black focus:border-red-500 outline-none" /></div>
+                                            <div className="space-y-2"><label className="text-[10px] font-black text-gray-600 uppercase tracking-widest pl-2">Win Streak</label><input type="text" value={currentFight.streak} onChange={(e) => updateFight({ streak: e.target.value })} placeholder="3 FIGHT WIN STREAK" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs font-black focus:border-red-500 outline-none" /></div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center"><label className="text-[10px] font-black text-green-500 uppercase italic tracking-widest pl-2">4. Career Journey Narrative </label><button onClick={generateJourney} className="text-[10px] text-green-500 font-black uppercase flex items-center gap-1.5 hover:text-white transition-all transform active:scale-95 bg-white/5 px-3 py-1.5 rounded-full border border-green-500/20"><Sparkles className="w-3.5 h-3.5"/> GENERATE JOURNEY</button></div>
+                                            <textarea value={currentFight.journeyCaption} onChange={(e) => updateFight({ journeyCaption: e.target.value })} placeholder="AI will weave the record & streak into a story..." className="w-full h-24 bg-green-600/5 border border-green-500/20 rounded-xl p-4 text-[11px] font-bold focus:border-green-500 outline-none resize-none text-green-50" />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
