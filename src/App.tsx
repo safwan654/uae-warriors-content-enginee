@@ -98,6 +98,7 @@ export default function App() {
   const [selectedPhotoIdx, setSelectedPhotoIdx] = useState<number | null>(null);
   const [isPhotoLoading, setIsPhotoLoading] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [confirmedPhotos, setConfirmedPhotos] = useState<Set<string>>(new Set());
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -154,33 +155,61 @@ export default function App() {
   // PHOTO PANEL LOGIC
   const selectRootFolder = async () => {
     try {
-      const handle = await (window as any).showDirectoryPicker();
+      const handle = await (window as any).showDirectoryPicker({
+        mode: 'read'
+      });
       setRootHandle(handle);
       setPhotoError(null);
+      // Try to trigger an immediate load
+      if (currentFight?.No) {
+        loadPhotosForFight();
+      }
     } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        setPhotoError("Failed to access folder. Ensure you're on a secure context or localhost.");
+      if (err.name === 'NotAllowedError') {
+        setPhotoError("Permission denied. Click again and select 'Allow' or 'Read Access'.");
+      } else if (err.name !== 'AbortError') {
+        setPhotoError("Selection failed. Use Chrome/Edge and select the base 'AppMaster' folder.");
       }
     }
   };
 
   const loadPhotosForFight = async () => {
     if (!rootHandle || !currentFight) return;
+    
+    // Check permissions if we have a stale handle
+    try {
+      if (await (rootHandle as any).queryPermission({ mode: 'read' }) !== 'granted') {
+          if (await (rootHandle as any).requestPermission({ mode: 'read' }) !== 'granted') {
+            setPhotoError("Grant read access to reload fight photos.");
+            return;
+          }
+      }
+    } catch (e) {
+      setPhotoError("Folder connection lost. Re-initialize Root Folder.");
+      return;
+    }
+
     setIsPhotoLoading(true);
     setPhotoError(null);
     setSelectedPhotoIdx(null);
+    setConfirmedPhotos(new Set()); // Reset confirmation set for new fight
     
     try {
-      const fightNo = currentFight.No;
+      const fightNo = currentFight.No.toString().trim();
       let fightFolder;
       
       try {
         fightFolder = await rootHandle.getDirectoryHandle(fightNo, { create: false });
       } catch (e) {
-        setFightPhotos([]);
-        setPhotoError(`No folder found for Fight ${fightNo}`);
-        setIsPhotoLoading(false);
-        return;
+        // Fallback: try "Fight X" if just "X" fails
+        try {
+          fightFolder = await rootHandle.getDirectoryHandle(`Fight ${fightNo}`, { create: false });
+        } catch (e2) {
+          setFightPhotos([]);
+          setPhotoError(`Target directory "${fightNo}" not found in root.`);
+          setIsPhotoLoading(false);
+          return;
+        }
       }
 
       const photos: {name: string, url: string}[] = [];
@@ -188,25 +217,35 @@ export default function App() {
 
       for await (const entry of (fightFolder as any).values()) {
         if (entry.kind === 'file') {
-          const name = entry.name.toLowerCase();
-          if (imageExtensions.some(ext => name.endsWith(ext))) {
+          const name = entry.name;
+          const lowerName = name.toLowerCase();
+          if (imageExtensions.some(ext => lowerName.endsWith(ext))) {
             const file = await entry.getFile();
             photos.push({
-              name: entry.name,
+              name: name,
               url: URL.createObjectURL(file)
             });
           }
         }
       }
 
-      // Sort by name (usually implies sequence)
       setFightPhotos(photos.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true})));
       if (photos.length > 0) setSelectedPhotoIdx(0);
-    } catch (err) {
-      setPhotoError("Error reading photos inside fight folder.");
+    } catch (err: any) {
+      setPhotoError(`Sync Error: ${err.message || "Cannot read fight folder"}`);
     } finally {
       setIsPhotoLoading(false);
     }
+  };
+
+  const toggleConfirmPhoto = (name: string) => {
+    const newSubset = new Set(confirmedPhotos);
+    if (newSubset.has(name)) {
+      newSubset.delete(name);
+    } else {
+      newSubset.add(name);
+    }
+    setConfirmedPhotos(newSubset);
   };
 
   const handlePhotoDrop = (e: React.DragEvent) => {
@@ -626,12 +665,36 @@ export default function App() {
                     <div className="p-4 space-y-4">
                         {/* MAIN PREVIEW */}
                         {selectedPhotoIdx !== null && (
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 <div className="aspect-video bg-black rounded-2xl border-4 border-white/5 overflow-hidden shadow-2xl relative group">
                                     <img src={fightPhotos[selectedPhotoIdx].url} alt="Preview" className="w-full h-full object-contain" />
+                                    {confirmedPhotos.has(fightPhotos[selectedPhotoIdx].name) && (
+                                        <div className="absolute top-4 left-4 bg-blue-600 text-white text-[8px] font-black px-3 py-1 rounded-full shadow-lg border border-blue-400 animate-in zoom-in-50">READY TO POST</div>
+                                    )}
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
                                         <div className="text-[9px] font-black text-white/50 uppercase truncate w-full">{fightPhotos[selectedPhotoIdx].name}</div>
                                     </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => toggleConfirmPhoto(fightPhotos[selectedPhotoIdx].name)}
+                                        className={cn(
+                                            "flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2 border",
+                                            confirmedPhotos.has(fightPhotos[selectedPhotoIdx].name) 
+                                                ? "bg-blue-600 border-blue-400 text-white shadow-lg" 
+                                                : "bg-white/5 border-white/10 text-gray-500 hover:bg-white/10"
+                                        )}
+                                    >
+                                        <ImageIcon className="w-3.5 h-3.5" />
+                                        {confirmedPhotos.has(fightPhotos[selectedPhotoIdx].name) ? "Confirmed Ready" : "Mark for Posting"}
+                                    </button>
+                                    <button 
+                                        onClick={() => { window.open(fightPhotos[selectedPhotoIdx].url, '_blank'); }}
+                                        className="p-3 bg-white/5 border border-white/10 rounded-xl text-gray-500 hover:text-white transition-all"
+                                        title="Open full size"
+                                    >
+                                        <Sparkles className="w-4 h-4" />
+                                    </button>
                                 </div>
                             </div>
                         )}
@@ -644,10 +707,16 @@ export default function App() {
                                     onClick={() => setSelectedPhotoIdx(idx)}
                                     className={cn(
                                         "aspect-square rounded-xl overflow-hidden border-2 transition-all relative group",
-                                        selectedPhotoIdx === idx ? "border-blue-500 scale-95 shadow-[0_0_15px_rgba(59,130,246,0.5)]" : "border-white/5 grayscale group-hover:grayscale-0"
+                                        selectedPhotoIdx === idx ? "border-blue-500 scale-95 shadow-[0_0_15px_rgba(59,130,246,0.5)]" : "border-white/5 grayscale group-hover:grayscale-0",
+                                        confirmedPhotos.has(photo.name) && "border-blue-500/50 grayscale-0 shadow-[0_0_10px_rgba(59,130,246,0.3)]"
                                     )}
                                 >
                                     <img src={photo.url} className="w-full h-full object-cover" loading="lazy" />
+                                    {confirmedPhotos.has(photo.name) && (
+                                        <div className="absolute top-1 right-1 bg-blue-600 rounded-full p-0.5 border border-white/20">
+                                            <CheckCircle2 className="w-2.5 h-2.5 text-white" />
+                                        </div>
+                                    )}
                                     <div className="absolute inset-0 bg-blue-600/20 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 </button>
                             ))}
