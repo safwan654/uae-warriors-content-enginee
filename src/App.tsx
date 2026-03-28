@@ -195,7 +195,14 @@ export default function App() {
     setConfirmedPhotos(new Set());
     
     try {
-      const targetNo = currentFight.No.toString().trim().toLowerCase();
+      const rawNo = currentFight?.No;
+      if (rawNo === undefined || rawNo === null) {
+          setPhotoError("Fight number (#) is missing for this selection.");
+          setIsPhotoLoading(false);
+          return;
+      }
+      
+      const targetNo = rawNo.toString().trim().toLowerCase();
       let fightFolder = null;
       
       // DEEP SEARCH: Iterate all subfolders to find a match (case-insensitive)
