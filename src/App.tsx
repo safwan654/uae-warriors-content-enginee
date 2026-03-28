@@ -306,9 +306,14 @@ export default function App() {
       Papa.parse(file, {
         header: true, skipEmptyLines: true,
         complete: (results: any) => {
-          const fights = results.data.map((f: any) => ({
-            ...f, completed: false, resultType: '', round: null, winner: null, staffCaption: '', xCaption: '', teamIntel: '', instaHandle: '', hashtags: '#UAEWarriors', postedX: false, postedInstagram: false
-          }));
+          const fights = results.data.map((f: any) => {
+            const fightNo = f.No || f['No.'] || f['#'] || f.Fight || f['Fight No'] || f.Order || '';
+            return {
+              ...f,
+              No: fightNo.toString(),
+              completed: false, resultType: '', round: null, winner: null, staffCaption: '', xCaption: '', teamIntel: '', instaHandle: '', hashtags: '#UAEWarriors', postedX: false, postedInstagram: false
+            };
+          });
           const eId = newEventInfo.name.replace(/\s+/g, '_') || `EVENT_${Date.now()}`;
           const finalData = { id: eId, info: newEventInfo, fights };
           set(ref(db, `events/${eId}`), finalData);
