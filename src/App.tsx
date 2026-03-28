@@ -162,7 +162,7 @@ export default function App() {
       setPhotoError(null);
       // Try to trigger an immediate load
       if (currentFight?.No) {
-        loadPhotosForFight();
+        setTimeout(() => loadPhotosForFight(), 100);
       }
     } catch (err: any) {
       if (err.name === 'NotAllowedError') {
@@ -176,7 +176,7 @@ export default function App() {
   const loadPhotosForFight = async () => {
     if (!rootHandle || !currentFight) return;
     
-    // Check permissions if we have a stale handle
+    // Check permissions
     try {
       if (await (rootHandle as any).queryPermission({ mode: 'read' }) !== 'granted') {
           if (await (rootHandle as any).requestPermission({ mode: 'read' }) !== 'granted') {
@@ -192,24 +192,33 @@ export default function App() {
     setIsPhotoLoading(true);
     setPhotoError(null);
     setSelectedPhotoIdx(null);
-    setConfirmedPhotos(new Set()); // Reset confirmation set for new fight
+    setConfirmedPhotos(new Set());
     
     try {
-      const fightNo = currentFight.No.toString().trim();
-      let fightFolder;
+      const targetNo = currentFight.No.toString().trim().toLowerCase();
+      let fightFolder = null;
       
-      try {
-        fightFolder = await rootHandle.getDirectoryHandle(fightNo, { create: false });
-      } catch (e) {
-        // Fallback: try "Fight X" if just "X" fails
-        try {
-          fightFolder = await rootHandle.getDirectoryHandle(`Fight ${fightNo}`, { create: false });
-        } catch (e2) {
-          setFightPhotos([]);
-          setPhotoError(`Target directory "${fightNo}" not found in root.`);
-          setIsPhotoLoading(false);
-          return;
+      // DEEP SEARCH: Iterate all subfolders to find a match (case-insensitive)
+      for await (const entry of (rootHandle as any).values()) {
+        if (entry.kind === 'directory') {
+          const folderName = entry.name.trim().toLowerCase();
+          // Matches "1", "01", "Fight 1", "F1", "Fight01"
+          if (folderName === targetNo || 
+              folderName === `fight ${targetNo}` || 
+              folderName === `fight${targetNo}` ||
+              folderName === `f${targetNo}` ||
+              folderName.includes(` ${targetNo}`)) {
+            fightFolder = entry;
+            break;
+          }
         }
+      }
+
+      if (!fightFolder) {
+        setFightPhotos([]);
+        setPhotoError(`Could not find folder for #${targetNo} in "${rootHandle.name}"`);
+        setIsPhotoLoading(false);
+        return;
       }
 
       const photos: {name: string, url: string}[] = [];
@@ -227,6 +236,10 @@ export default function App() {
             });
           }
         }
+      }
+
+      if (photos.length === 0) {
+        setPhotoError(`No images found in folder "${fightFolder.name}"`);
       }
 
       setFightPhotos(photos.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true})));
@@ -642,7 +655,10 @@ export default function App() {
             <div className="p-5 border-b border-white/5 bg-black/20 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="bg-blue-600/20 p-2 rounded-lg"><ImageIcon className="w-4 h-4 text-blue-500" /></div>
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Fight Media</span>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Fight Media</span>
+                        {rootHandle && <span className="text-[8px] text-gray-600 font-bold uppercase truncate max-w-[120px]">@{rootHandle.name}</span>}
+                    </div>
                 </div>
                 {!rootHandle ? (
                     <button onClick={selectRootFolder} className="text-[9px] font-black uppercase text-blue-500 hover:text-white flex items-center gap-1.5 transition-colors bg-blue-500/10 px-3 py-1.5 rounded-full border border-blue-500/20"><FolderOpen className="w-3 h-3"/> Initialize Root</button>
