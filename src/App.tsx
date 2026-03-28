@@ -99,6 +99,7 @@ export default function App() {
   const [isPhotoLoading, setIsPhotoLoading] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [confirmedPhotos, setConfirmedPhotos] = useState<Set<string>>(new Set());
+  const [fightFolderHandles, setFightFolderHandles] = useState<Record<number, any>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -152,86 +153,51 @@ export default function App() {
     }
   };
 
-  // PHOTO PANEL LOGIC
-  const selectRootFolder = async () => {
+  // PHOTO PANEL LOGIC (MANUAL FOLDER SELECTION PER FIGHT)
+  const selectFolderForCurrentFight = async () => {
+    if (selectedFightIdx === null) return;
     try {
-      const handle = await (window as any).showDirectoryPicker({
-        mode: 'read'
-      });
-      setRootHandle(handle);
+      const handle = await (window as any).showDirectoryPicker({ mode: 'read' });
+      const newHandles = { ...fightFolderHandles, [selectedFightIdx]: handle };
+      setFightFolderHandles(newHandles);
       setPhotoError(null);
-      // Try to trigger an immediate load
-      if (currentFight?.No) {
-        setTimeout(() => loadPhotosForFight(), 100);
-      }
+      loadPhotosFromHandle(handle);
     } catch (err: any) {
       if (err.name === 'NotAllowedError') {
-        setPhotoError("Permission denied. Click again and select 'Allow' or 'Read Access'.");
+        setPhotoError("Permission denied. Ensure you click 'Allow' or 'Read Access' in the browser prompt.");
       } else if (err.name !== 'AbortError') {
-        setPhotoError("Selection failed. Use Chrome/Edge and select the base 'AppMaster' folder.");
+        setPhotoError("Selection failed. Use Chrome/Edge on Desktop and select the specific fight folder.");
       }
     }
   };
 
-  const loadPhotosForFight = async () => {
-    if (!rootHandle || !currentFight) return;
-    
-    // Check permissions
-    try {
-      if (await (rootHandle as any).queryPermission({ mode: 'read' }) !== 'granted') {
-          if (await (rootHandle as any).requestPermission({ mode: 'read' }) !== 'granted') {
-            setPhotoError("Grant read access to reload fight photos.");
-            return;
-          }
-      }
-    } catch (e) {
-      setPhotoError("Folder connection lost. Re-initialize Root Folder.");
-      return;
-    }
-
+  const loadPhotosFromHandle = async (handle: any) => {
+    if (!handle) return;
     setIsPhotoLoading(true);
     setPhotoError(null);
     setSelectedPhotoIdx(null);
     setConfirmedPhotos(new Set());
-    
+
+    // Check permissions
     try {
-      const rawNo = currentFight?.No;
-      if (rawNo === undefined || rawNo === null) {
-          setPhotoError("Fight number (#) is missing for this selection.");
-          setIsPhotoLoading(false);
-          return;
-      }
-      
-      const targetNo = rawNo.toString().trim().toLowerCase();
-      let fightFolder = null;
-      
-      // DEEP SEARCH: Iterate all subfolders to find a match (case-insensitive)
-      for await (const entry of (rootHandle as any).values()) {
-        if (entry.kind === 'directory') {
-          const folderName = entry.name.trim().toLowerCase();
-          // Matches "1", "01", "Fight 1", "F1", "Fight01"
-          if (folderName === targetNo || 
-              folderName === `fight ${targetNo}` || 
-              folderName === `fight${targetNo}` ||
-              folderName === `f${targetNo}` ||
-              folderName.includes(` ${targetNo}`)) {
-            fightFolder = entry;
-            break;
+      if (await handle.queryPermission({ mode: 'read' }) !== 'granted') {
+          if (await handle.requestPermission({ mode: 'read' }) !== 'granted') {
+            setPhotoError("Grant read access to load fight photos.");
+            setIsPhotoLoading(false);
+            return;
           }
-        }
       }
+    } catch (e) {
+      setPhotoError("Folder connection lost. Re-select the folder.");
+      setIsPhotoLoading(false);
+      return;
+    }
 
-      if (!fightFolder) {
-        setFightPhotos([]);
-        setPhotoError(`Could not find folder for #${targetNo} in "${rootHandle.name}"`);
-        setIsPhotoLoading(false);
-        return;
-      }
-
+    try {
       const photos: {name: string, url: string}[] = [];
       const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
 
-      for await (const entry of (fightFolder as any).values()) {
+      for await (const entry of handle.values()) {
         if (entry.kind === 'file') {
           const name = entry.name;
           const lowerName = name.toLowerCase();
@@ -246,13 +212,13 @@ export default function App() {
       }
 
       if (photos.length === 0) {
-        setPhotoError(`No images found in folder "${fightFolder.name}"`);
+        setPhotoError(`No images found in folder "${handle.name}"`);
       }
 
       setFightPhotos(photos.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true})));
       if (photos.length > 0) setSelectedPhotoIdx(0);
     } catch (err: any) {
-      setPhotoError(`Sync Error: ${err.message || "Cannot read fight folder"}`);
+      setPhotoError(`Error reading photos: ${err.message || "Cannot access directory"}`);
     } finally {
       setIsPhotoLoading(false);
     }
@@ -295,10 +261,18 @@ export default function App() {
   }, [fightPhotos]);
 
   useEffect(() => {
-    if (rootHandle && currentFight?.No) {
-      loadPhotosForFight();
+    if (selectedFightIdx !== null) {
+      const existingHandle = fightFolderHandles[selectedFightIdx];
+      if (existingHandle) {
+        loadPhotosFromHandle(existingHandle);
+      } else {
+        setFightPhotos([]);
+        setPhotoError(null);
+        setSelectedPhotoIdx(null);
+        setConfirmedPhotos(new Set());
+      }
     }
-  }, [rootHandle, currentFight?.No]);
+  }, [selectedFightIdx]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -669,23 +643,26 @@ export default function App() {
                     <div className="bg-blue-600/20 p-2 rounded-lg"><ImageIcon className="w-4 h-4 text-blue-500" /></div>
                     <div className="flex flex-col">
                         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Fight Media</span>
-                        {rootHandle && <span className="text-[8px] text-gray-600 font-bold uppercase truncate max-w-[120px]">@{rootHandle.name}</span>}
+                        {selectedFightIdx !== null && fightFolderHandles[selectedFightIdx] && (
+                          <span className="text-[8px] text-gray-600 font-bold uppercase truncate max-w-[120px]">@{fightFolderHandles[selectedFightIdx].name}</span>
+                        )}
                     </div>
                 </div>
-                {!rootHandle ? (
-                    <button onClick={selectRootFolder} className="text-[9px] font-black uppercase text-blue-500 hover:text-white flex items-center gap-1.5 transition-colors bg-blue-500/10 px-3 py-1.5 rounded-full border border-blue-500/20"><FolderOpen className="w-3 h-3"/> Initialize Root</button>
-                ) : (
-                    <button onClick={loadPhotosForFight} className="text-gray-500 hover:text-white transition-colors" title="Refresh folder"><RefreshCw className={cn("w-4 h-4", isPhotoLoading && "animate-spin")} /></button>
-                )}
+                <div className="flex items-center gap-2">
+                   {selectedFightIdx !== null && fightFolderHandles[selectedFightIdx] && (
+                     <button onClick={() => loadPhotosFromHandle(fightFolderHandles[selectedFightIdx])} className="text-gray-500 hover:text-white transition-colors" title="Sync local folder"><RefreshCw className={cn("w-4 h-4", isPhotoLoading && "animate-spin")} /></button>
+                   )}
+                   <button onClick={selectFolderForCurrentFight} className="text-blue-500 hover:text-white transition-colors" title="Change folder"><FolderOpen className="w-4 h-4" /></button>
+                </div>
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                {!rootHandle && fightPhotos.length === 0 ? (
+                {selectedFightIdx !== null && !fightFolderHandles[selectedFightIdx] ? (
                     <div className="h-full flex flex-col items-center justify-center p-12 text-center">
                         <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-6"><FolderOpen className="w-8 h-8 text-gray-700" /></div>
-                        <h3 className="text-xs font-black uppercase text-gray-500 mb-2">No Folder Selected</h3>
-                        <p className="text-[10px] text-gray-700 font-bold uppercase leading-relaxed mb-6">Select "AppMaster" folder to auto-sync fight images.</p>
-                        <button onClick={selectRootFolder} className="bg-white text-black text-[9px] font-black uppercase px-6 py-3 rounded-xl hover:bg-blue-600 hover:text-white transition-all">Select Master Folder</button>
+                        <h3 className="text-xs font-black uppercase text-gray-500 mb-2">Assign Folder</h3>
+                        <p className="text-[10px] text-gray-700 font-bold uppercase leading-relaxed mb-6">Select the photos folder for Fight #{currentFight?.No}</p>
+                        <button onClick={selectFolderForCurrentFight} className="bg-white text-black text-[9px] font-black uppercase px-6 py-3 rounded-xl hover:bg-blue-600 hover:text-white transition-all">Select specific folder</button>
                     </div>
                 ) : isPhotoLoading ? (
                     <div className="h-full flex items-center justify-center"><RefreshCw className="w-8 h-8 text-blue-600 animate-spin opacity-20" /></div>
