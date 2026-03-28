@@ -93,7 +93,6 @@ export default function App() {
   const [isLive, setIsLive] = useState(false);
   
   // Photo Panel State
-  const [rootHandle, setRootHandle] = useState<any>(null);
   const [fightPhotos, setFightPhotos] = useState<{name: string, url: string}[]>([]);
   const [selectedPhotoIdx, setSelectedPhotoIdx] = useState<number | null>(null);
   const [isPhotoLoading, setIsPhotoLoading] = useState(false);
