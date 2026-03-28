@@ -21,8 +21,7 @@ import {
   Image as ImageIcon,
   FolderOpen,
   RefreshCw,
-  FileWarning,
-  X
+  FileWarning
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
