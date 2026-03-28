@@ -649,7 +649,10 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-2">
                    {selectedFightIdx !== null && fightFolderHandles[selectedFightIdx] && (
-                     <button onClick={() => loadPhotosFromHandle(fightFolderHandles[selectedFightIdx])} className="text-gray-500 hover:text-white transition-colors" title="Sync local folder"><RefreshCw className={cn("w-4 h-4", isPhotoLoading && "animate-spin")} /></button>
+                     <>
+                        <button onClick={() => setConfirmedPhotos(new Set())} className="text-[9px] font-black uppercase text-gray-500 hover:text-red-500 px-2 transition-colors" title="Clear selection">Reset</button>
+                        <button onClick={() => loadPhotosFromHandle(fightFolderHandles[selectedFightIdx])} className="text-gray-500 hover:text-white transition-colors" title="Sync local folder"><RefreshCw className={cn("w-4 h-4", isPhotoLoading && "animate-spin")} /></button>
+                     </>
                    )}
                    <button onClick={selectFolderForCurrentFight} className="text-blue-500 hover:text-white transition-colors" title="Change folder"><FolderOpen className="w-4 h-4" /></button>
                 </div>
@@ -686,43 +689,66 @@ export default function App() {
                                             "flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center justify-center gap-2 border",
                                             confirmedPhotos.has(fightPhotos[selectedPhotoIdx].name) 
                                                 ? "bg-blue-600 border-blue-400 text-white shadow-lg" 
-                                                : "bg-white/5 border-white/10 text-gray-500 hover:bg-white/10"
+                                                : "bg-[#1a1c2a] border-white/5 text-gray-400 hover:bg-white/10"
                                         )}
                                     >
-                                        <ImageIcon className="w-3.5 h-3.5" />
-                                        {confirmedPhotos.has(fightPhotos[selectedPhotoIdx].name) ? "Confirmed Ready" : "Mark for Posting"}
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        {confirmedPhotos.has(fightPhotos[selectedPhotoIdx].name) ? "Confirmed Ready" : "Add to Post"}
                                     </button>
                                     <button 
                                         onClick={() => { window.open(fightPhotos[selectedPhotoIdx].url, '_blank'); }}
-                                        className="p-3 bg-white/5 border border-white/10 rounded-xl text-gray-500 hover:text-white transition-all"
+                                        className="p-3 bg-[#1a1c2a] border border-white/5 rounded-xl text-gray-500 hover:text-white transition-all shadow-xl"
                                         title="Open full size"
                                     >
                                         <Sparkles className="w-4 h-4" />
                                     </button>
                                 </div>
+
+                                {confirmedPhotos.size > 0 && (
+                                  <button 
+                                    onClick={() => {
+                                      const names = Array.from(confirmedPhotos).join(", ");
+                                      navigator.clipboard.writeText(names);
+                                      alert("Copied filenames to clipboard! Paste in Finder to filter.");
+                                    }}
+                                    className="w-full py-2 bg-blue-600/10 border border-blue-600/30 rounded-lg text-[9px] font-black text-blue-500 uppercase hover:bg-blue-600 hover:text-white transition-all tracking-wider"
+                                  >
+                                    Copy Names: {confirmedPhotos.size} Ready
+                                  </button>
+                                )}
                             </div>
                         )}
 
                         {/* THUMBNAIL GRID */}
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-3 gap-2 pb-10">
                             {fightPhotos.map((photo, idx) => (
-                                <button 
-                                    key={idx} 
-                                    onClick={() => setSelectedPhotoIdx(idx)}
+                                <div key={idx} className="relative group">
+                                  <button 
+                                      onClick={() => setSelectedPhotoIdx(idx)}
+                                      className={cn(
+                                          "aspect-square w-full rounded-xl overflow-hidden border-2 transition-all relative",
+                                          selectedPhotoIdx === idx ? "border-blue-500 scale-[0.98] ring-4 ring-blue-500/20" : "border-white/5 grayscale group-hover:grayscale-0",
+                                          confirmedPhotos.has(photo.name) && "border-blue-500/50 grayscale-0 bg-blue-600/20"
+                                      )}
+                                  >
+                                      <img src={photo.url} className="w-full h-full object-cover" loading="lazy" />
+                                      {confirmedPhotos.has(photo.name) && (
+                                          <div className="absolute inset-0 bg-blue-600/10 flex items-center justify-center">
+                                            <div className="bg-blue-600 p-1.5 rounded-full shadow-2xl scale-125 mb-1"><CheckCircle2 className="w-4 h-4 text-white" /></div>
+                                          </div>
+                                      )}
+                                  </button>
+                                  {/* Quick Toggle Button Overlay */}
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); toggleConfirmPhoto(photo.name); }}
                                     className={cn(
-                                        "aspect-square rounded-xl overflow-hidden border-2 transition-all relative group",
-                                        selectedPhotoIdx === idx ? "border-blue-500 scale-95 shadow-[0_0_15px_rgba(59,130,246,0.5)]" : "border-white/5 grayscale group-hover:grayscale-0",
-                                        confirmedPhotos.has(photo.name) && "border-blue-500/50 grayscale-0 shadow-[0_0_10px_rgba(59,130,246,0.3)]"
+                                      "absolute top-1.5 right-1.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all z-10",
+                                      confirmedPhotos.has(photo.name) ? "bg-blue-600 border-white/50 text-white" : "bg-black/40 border-white/10 text-transparent hover:text-white hover:border-white/30"
                                     )}
-                                >
-                                    <img src={photo.url} className="w-full h-full object-cover" loading="lazy" />
-                                    {confirmedPhotos.has(photo.name) && (
-                                        <div className="absolute top-1 right-1 bg-blue-600 rounded-full p-0.5 border border-white/20">
-                                            <CheckCircle2 className="w-2.5 h-2.5 text-white" />
-                                        </div>
-                                    )}
-                                    <div className="absolute inset-0 bg-blue-600/20 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                </button>
+                                  >
+                                    <CheckCircle2 className="w-3 h-3" />
+                                  </button>
+                                </div>
                             ))}
                         </div>
                     </div>
