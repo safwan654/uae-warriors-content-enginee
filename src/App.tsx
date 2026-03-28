@@ -17,7 +17,12 @@ import {
   Search,
   Trash2,
   Edit2,
-  Download
+  Download,
+  Image as ImageIcon,
+  FolderOpen,
+  RefreshCw,
+  FileWarning,
+  X
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -87,6 +92,13 @@ export default function App() {
   const [newEventInfo, setNewEventInfo] = useState({ name: '', date: '', location: '' });
   const [copyFeedback, setCopyFeedback] = useState<'insta' | 'twitter' | null>(null);
   const [isLive, setIsLive] = useState(false);
+  
+  // Photo Panel State
+  const [rootHandle, setRootHandle] = useState<any>(null);
+  const [fightPhotos, setFightPhotos] = useState<{name: string, url: string}[]>([]);
+  const [selectedPhotoIdx, setSelectedPhotoIdx] = useState<number | null>(null);
+  const [isPhotoLoading, setIsPhotoLoading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -139,6 +151,96 @@ export default function App() {
       }
     }
   };
+
+  // PHOTO PANEL LOGIC
+  const selectRootFolder = async () => {
+    try {
+      const handle = await (window as any).showDirectoryPicker();
+      setRootHandle(handle);
+      setPhotoError(null);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setPhotoError("Failed to access folder. Ensure you're on a secure context or localhost.");
+      }
+    }
+  };
+
+  const loadPhotosForFight = async () => {
+    if (!rootHandle || !currentFight) return;
+    setIsPhotoLoading(true);
+    setPhotoError(null);
+    setSelectedPhotoIdx(null);
+    
+    try {
+      const fightNo = currentFight.No;
+      let fightFolder;
+      
+      try {
+        fightFolder = await rootHandle.getDirectoryHandle(fightNo, { create: false });
+      } catch (e) {
+        setFightPhotos([]);
+        setPhotoError(`No folder found for Fight ${fightNo}`);
+        setIsPhotoLoading(false);
+        return;
+      }
+
+      const photos: {name: string, url: string}[] = [];
+      const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+
+      for await (const entry of (fightFolder as any).values()) {
+        if (entry.kind === 'file') {
+          const name = entry.name.toLowerCase();
+          if (imageExtensions.some(ext => name.endsWith(ext))) {
+            const file = await entry.getFile();
+            photos.push({
+              name: entry.name,
+              url: URL.createObjectURL(file)
+            });
+          }
+        }
+      }
+
+      // Sort by name (usually implies sequence)
+      setFightPhotos(photos.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true})));
+      if (photos.length > 0) setSelectedPhotoIdx(0);
+    } catch (err) {
+      setPhotoError("Error reading photos inside fight folder.");
+    } finally {
+      setIsPhotoLoading(false);
+    }
+  };
+
+  const handlePhotoDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files);
+    const imageExtensions = ['image/jpeg', 'image/png', 'image/webp'];
+    
+    const droppedPhotos = files
+      .filter(f => imageExtensions.includes(f.type))
+      .map(f => ({
+        name: f.name,
+        url: URL.createObjectURL(f)
+      }));
+
+    if (droppedPhotos.length > 0) {
+      const newPhotos = [...fightPhotos, ...droppedPhotos];
+      setFightPhotos(newPhotos.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric: true})));
+      if (selectedPhotoIdx === null) setSelectedPhotoIdx(fightPhotos.length);
+    }
+  };
+
+  // Revoke URLs on unmount or refresh
+  useEffect(() => {
+    return () => {
+      fightPhotos.forEach(p => URL.revokeObjectURL(p.url));
+    };
+  }, [fightPhotos]);
+
+  useEffect(() => {
+    if (rootHandle && currentFight?.No) {
+      loadPhotosForFight();
+    }
+  }, [rootHandle, currentFight?.No]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -492,6 +594,88 @@ export default function App() {
                 </div>
             )}
         </section>
+
+        {/* PHOTO PANEL (RIGHT) */}
+        <aside 
+            className="w-[420px] bg-[#0c0d12] border-l border-white/5 flex flex-col shadow-[inset_10px_0_30px_rgba(0,0,0,0.5)]"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handlePhotoDrop}
+        >
+            <div className="p-5 border-b border-white/5 bg-black/20 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="bg-blue-600/20 p-2 rounded-lg"><ImageIcon className="w-4 h-4 text-blue-500" /></div>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Fight Media</span>
+                </div>
+                {!rootHandle ? (
+                    <button onClick={selectRootFolder} className="text-[9px] font-black uppercase text-blue-500 hover:text-white flex items-center gap-1.5 transition-colors bg-blue-500/10 px-3 py-1.5 rounded-full border border-blue-500/20"><FolderOpen className="w-3 h-3"/> Initialize Root</button>
+                ) : (
+                    <button onClick={loadPhotosForFight} className="text-gray-500 hover:text-white transition-colors" title="Refresh folder"><RefreshCw className={cn("w-4 h-4", isPhotoLoading && "animate-spin")} /></button>
+                )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {!rootHandle && fightPhotos.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center p-12 text-center">
+                        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-6"><FolderOpen className="w-8 h-8 text-gray-700" /></div>
+                        <h3 className="text-xs font-black uppercase text-gray-500 mb-2">No Folder Selected</h3>
+                        <p className="text-[10px] text-gray-700 font-bold uppercase leading-relaxed mb-6">Select "AppMaster" folder to auto-sync fight images.</p>
+                        <button onClick={selectRootFolder} className="bg-white text-black text-[9px] font-black uppercase px-6 py-3 rounded-xl hover:bg-blue-600 hover:text-white transition-all">Select Master Folder</button>
+                    </div>
+                ) : isPhotoLoading ? (
+                    <div className="h-full flex items-center justify-center"><RefreshCw className="w-8 h-8 text-blue-600 animate-spin opacity-20" /></div>
+                ) : fightPhotos.length > 0 ? (
+                    <div className="p-4 space-y-4">
+                        {/* MAIN PREVIEW */}
+                        {selectedPhotoIdx !== null && (
+                            <div className="space-y-3">
+                                <div className="aspect-video bg-black rounded-2xl border-4 border-white/5 overflow-hidden shadow-2xl relative group">
+                                    <img src={fightPhotos[selectedPhotoIdx].url} alt="Preview" className="w-full h-full object-contain" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
+                                        <div className="text-[9px] font-black text-white/50 uppercase truncate w-full">{fightPhotos[selectedPhotoIdx].name}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* THUMBNAIL GRID */}
+                        <div className="grid grid-cols-3 gap-2">
+                            {fightPhotos.map((photo, idx) => (
+                                <button 
+                                    key={idx} 
+                                    onClick={() => setSelectedPhotoIdx(idx)}
+                                    className={cn(
+                                        "aspect-square rounded-xl overflow-hidden border-2 transition-all relative group",
+                                        selectedPhotoIdx === idx ? "border-blue-500 scale-95 shadow-[0_0_15px_rgba(59,130,246,0.5)]" : "border-white/5 grayscale group-hover:grayscale-0"
+                                    )}
+                                >
+                                    <img src={photo.url} className="w-full h-full object-cover" loading="lazy" />
+                                    <div className="absolute inset-0 bg-blue-600/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="h-full flex flex-col items-center justify-center p-12 text-center">
+                        <div className="w-16 h-16 bg-red-600/10 rounded-full flex items-center justify-center mb-6"><FileWarning className="w-8 h-8 text-red-500/50" /></div>
+                        {photoError ? (
+                            <>
+                                <h3 className="text-xs font-black uppercase text-red-500 mb-2">Folder Problem</h3>
+                                <p className="text-[10px] text-gray-600 font-bold uppercase leading-relaxed">{photoError}</p>
+                            </>
+                        ) : (
+                            <>
+                                <h3 className="text-xs font-black uppercase text-gray-500 mb-2">No Media Found</h3>
+                                <p className="text-[10px] text-gray-600 font-bold uppercase leading-relaxed">Add images to folder "{currentFight?.No}" inside AppMaster.</p>
+                            </>
+                        )}
+                        <div className="mt-8 p-4 bg-white/5 rounded-xl border border-dashed border-white/10 w-full">
+                            <p className="text-[9px] text-gray-500 font-black uppercase mb-1">Backup: Drag & Drop</p>
+                            <p className="text-[8px] text-gray-400 font-medium">Drop photos directly here</p>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </aside>
       </main>
 
       {/* EVENT SELECTOR MODAL */}
