@@ -21,7 +21,8 @@ import {
   Image as ImageIcon,
   FolderOpen,
   RefreshCw,
-  FileWarning
+  FileWarning,
+  ExternalLink
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -547,7 +548,27 @@ export default function App() {
                                         <textarea value={currentFight.teamIntel} onChange={(e) => updateFight({ teamIntel: e.target.value })} placeholder="Paste professional staff notes/caption here..." className="w-full h-32 bg-black/40 border-2 border-dashed border-white/5 rounded-xl p-5 text-sm font-bold focus:border-red-500 outline-none resize-none" />
                                     </div>
                                     <div className="space-y-3">
-                                        <div className="flex justify-between items-center"><label className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest pl-2">2. Instagram Narrative </label><button onClick={regenerateCaption} className="text-[10px] text-red-500 font-black uppercase flex items-center gap-1.5 hover:text-white transition-all transform active:scale-95 bg-white/5 px-3 py-1.5 rounded-full"><Sparkles className="w-3.5 h-3.5"/> REGENERATE BOTH</button></div>
+                                        <div className="flex justify-between items-center">
+                                            <label className="text-[10px] font-black text-blue-500 uppercase italic tracking-widest pl-2">2. Instagram Narrative </label>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={() => {
+                                                        const prompt = encodeURIComponent(`Write a professional MMA caption for Instagram and Twitter for this fight:
+Fight: ${currentFight['Red Corner']} vs ${currentFight['Blue Corner']}
+Result: ${currentFight.resultType || 'TBD'} in Round ${currentFight.round || 'TBD'}
+Winner: ${currentFight.winner === 'red' ? currentFight['Red Corner'] : currentFight.winner === 'blue' ? currentFight['Blue Corner'] : 'TBD'}
+Intel: ${currentFight.teamIntel || 'No specific notes'}
+Hashtags: ${currentFight.hashtags || '#UAEWarriors'}
+Style: Premium, exciting, and professional.`);
+                                                        window.open(`https://agents.iamsaif.ai/c/new?agent_id=agent_KUY9pzP8wBThtLCF5dm3j&prompt=${prompt}`, '_blank');
+                                                    }}
+                                                    className="text-[10px] text-blue-500 font-black uppercase flex items-center gap-1.5 hover:text-white transition-all transform active:scale-95 bg-blue-600/10 px-3 py-1.5 rounded-full border border-blue-500/20"
+                                                >
+                                                    <ExternalLink className="w-3.5 h-3.5"/> OPEN SAIF AGENT
+                                                </button>
+                                                <button onClick={regenerateCaption} className="text-[10px] text-red-500 font-black uppercase flex items-center gap-1.5 hover:text-white transition-all transform active:scale-95 bg-white/5 px-3 py-1.5 rounded-full"><Sparkles className="w-3.5 h-3.5"/> REGENERATE BOTH</button>
+                                            </div>
+                                        </div>
                                         <textarea value={currentFight.staffCaption} onChange={(e) => updateFight({ staffCaption: e.target.value })} placeholder="AI will enhance team intel for Instagram..." className="w-full h-24 bg-blue-600/5 border border-blue-500/20 rounded-xl p-4 text-[11px] font-bold focus:border-blue-500 outline-none resize-none text-blue-50" />
                                     </div>
                                     <div className="space-y-3">
