@@ -557,6 +557,7 @@ export default function App() {
 Fight: ${currentFight['Red Corner']} vs ${currentFight['Blue Corner']}
 Result: ${currentFight.resultType || 'TBD'} in Round ${currentFight.round || 'TBD'}
 Winner: ${currentFight.winner === 'red' ? currentFight['Red Corner'] : currentFight.winner === 'blue' ? currentFight['Blue Corner'] : 'TBD'}
+Fighter Handle: ${currentFight.instaHandle || 'N/A'}
 Intel: ${currentFight.teamIntel || 'No specific notes'}
 Hashtags: ${currentFight.hashtags || '#UAEWarriors'}
 Style: Premium, exciting, and professional.`);
